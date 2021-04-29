@@ -43,18 +43,18 @@ def get_version(app):
     return version
 
 
-module = 'geocurrency'
+module = 'djangophysics'
 
 setup(
-    name='geocurrency',
-    description='Web based services to convert units and currencies.',
+    name='djangophysics',
+    description='Django APIs for physics conversion and calculations',
     python_requires='>3.7.0',
     version=get_version(module),
     author='Frédéric MEUROU',
     author_email='fm@peabytes.me',
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url='https://api.geocurrency.me/swagger/',
+    url='https://api.geophysics.io/swagger/',
     install_requires=[
         "Django~=3.0",
         "django-cors-headers~=3.2",
@@ -113,12 +113,12 @@ setup(
         "License :: OSI Approved :: MIT License",
     ],
     py_modules=[
-        'geocurrency.core',
-        'geocurrency.countries',
-        'geocurrency.currencies',
-        'geocurrency.rates',
-        'geocurrency.units',
-        'geocurrency.converters',
-        'geocurrency.calculations'
+        'djangophysics.core',
+        'djangophysics.countries',
+        'djangophysics.currencies',
+        'djangophysics.rates',
+        'djangophysics.units',
+        'djangophysics.converters',
+        'djangophysics.calculations'
     ],
 )
