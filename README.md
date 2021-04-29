@@ -57,12 +57,10 @@ $ ./manage.py fetch_rates
 ## About 
 
 ### Project goals
-
-Web based services to convert units and currencies. 
-GeoCurrency is a portmanteau of the words "Geocoding" and "Currency" which where the main goals of the initial project
+The goal of this project is to provide physics as a service.
 
 ### Project website
-A live version of this service is available at <https://api.geocurrency.me>.
+A live version of this service is available at <https://www.geophysics.io>.
 
 ### Leadership
 
