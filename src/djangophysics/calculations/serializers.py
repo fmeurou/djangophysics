@@ -206,13 +206,15 @@ class ExpressionSerializer(serializers.Serializer):
         except KeyError:
             self._errors['operands'] = "Missing operands"
             return False
-        except pint.errors.DimensionalityError:
+        except (pint.errors.DimensionalityError,
+                pint.errors.UndefinedUnitError):
             self._errors['expression'] = "Incoherent dimension"
             return False
         if out_units:
             try:
                 result.to(out_units)
-            except pint.errors.DimensionalityError:
+            except (pint.errors.DimensionalityError,
+                    pint.errors.UndefinedUnitError):
                 self._errors['out_units'] = "Incoherent output dimension"
                 return False
         return True
