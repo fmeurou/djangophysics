@@ -1,5 +1,5 @@
 """
-django-physics Rates app config
+djangophysics Rates app config
 """
 
 from django.apps import AppConfig

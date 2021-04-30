@@ -5,6 +5,7 @@ from datetime import date
 
 from setuptools import setup, find_packages
 
+
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
@@ -23,7 +24,7 @@ def get_version(app):
         ).rstrip().decode('utf8')
         git_tag = git_describe.split('-')[0]
         git_commits = git_describe.split('-')[1]
-        if branch == 'master':
+        if branch == 'main':
             suffix = ''
         else:
             suffix = 'dev'

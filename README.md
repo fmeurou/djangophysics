@@ -1,4 +1,4 @@
-# django-physics
+# djangophysics
 
 Django APIs for Physics
 
@@ -26,11 +26,11 @@ Check the syntax and dimension of a formula with units, and evaluate its value
 
 ## Install
 
-pip install geocurrency
+pip install djangophysics
 
 ## Docker
 
-doocker is available at fmeurou/geocurrency
+docker is available at fmeurou/djangophysics
 
 ## Usage
 
