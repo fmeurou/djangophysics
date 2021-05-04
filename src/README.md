@@ -43,7 +43,7 @@ Authentication is required to store custom conversion rates and custom conversio
 By default, the app is configured to allow authentication through an API token that can be generated for a user on the 
 Django admin site.
 
-API authentication can be achieved with an Authorization header header with value Token <APIToken>
+API authentication can be achieved with an Authorization header with value Token <APIToken>
 curl -H "Authorization: Token <user token>".
 
 ### Language support
@@ -58,11 +58,20 @@ $ ./manage.py fetch_rates
 
 ### Project goals
 
-Web based services to convert units and currencies. 
-GeoCurrency is a portmanteau of the words "Geocoding" and "Currency" which where the main goals of the initial project
+Geophysics aims at bringing physical quantities to Web Services.
+
 
 ### Project website
+
 A live version of this service is available at <https://api.geophysics.io>.
+
+###  Mentions
+
+This module relies on the great work from the following projects:
+- (Django)[https://www.djangoproject.com/] 
+- (Django Rest Framework)[https://www.django-rest-framework.org/]
+- (Pint)[https://pint.readthedocs.io/en/stable/]
+- (Sympy)[https://www.sympy.org/en/index.html]
 
 ### Leadership
 
