@@ -68,10 +68,10 @@ A live version of this service is available at <https://api.geophysics.io>.
 ###  Mentions
 
 This module relies on the great work from the following projects:
-- (Django)[https://www.djangoproject.com/] 
-- (Django Rest Framework)[https://www.django-rest-framework.org/]
-- (Pint)[https://pint.readthedocs.io/en/stable/]
-- (Sympy)[https://www.sympy.org/en/index.html]
+- [Django](https://www.djangoproject.com/) 
+- [Django Rest Framework](https://www.django-rest-framework.org/)
+- [Pint](https://pint.readthedocs.io/en/stable/)
+- [Sympy](https://www.sympy.org/en/index.html)
 
 ### Leadership
 
