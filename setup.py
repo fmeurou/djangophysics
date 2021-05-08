@@ -33,7 +33,7 @@ def get_version(app):
     except (subprocess.CalledProcessError, OSError) as e:
         print('git not installed', e)
     try:
-        fp = open('{}/__version__.py'.format(app), 'w')
+        fp = open('{}/version.py'.format(app), 'w')
         fp.write(
             '__version__ = [{}, {}, "{}"]'.format(
                 git_tag.replace('.', ','), git_commits, suffix)
