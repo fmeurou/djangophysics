@@ -289,25 +289,6 @@ STATIC_URL = '/static/'
 SENDFILE_BACKEND = 'sendfile.backends.nginx'
 SENDFILE_URL = '/media'
 
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'file': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': '/var/log/djangophysics/api-debug.log',
-        },
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['file'],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-    },
-}
-
 SERVICES = {
     'geocoding': {
         'pelias': 'djangophysics.countries.services.pelias.PeliasGeocoder',

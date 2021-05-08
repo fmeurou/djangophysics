@@ -35,8 +35,8 @@ def get_version(app):
     try:
         fp = open('{}/version.py'.format(app), 'w')
         fp.write(
-            'djangophysics_version = [{}, {}, "{}"]'.format(
-                git_tag.replace('.', ','), git_commits, suffix)
+            'djangophysics_version = [{}, {}, "{}"]\n'.format(
+                git_tag.replace('.', ', '), git_commits, suffix)
         )
         fp.close()
     except Exception:
