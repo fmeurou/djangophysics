@@ -74,7 +74,7 @@ LOGGING = {
         'file': {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
-            'filename': '/var/log/geophysics/api.log',
+            'filename': '/var/log/physics/api.log',
         },
     },
     'loggers': {

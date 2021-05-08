@@ -358,3 +358,14 @@ CACHES = {
         'TIMEOUT': None
     }
 }
+
+from djangophysics.core.settings import *
+from djangophysics.countries.settings import *
+from djangophysics.currencies.settings import *
+from djangophysics.rates.settings import *
+from djangophysics.units.settings import *
+
+try:
+    from .local import *
+except ImportError:
+    pass
