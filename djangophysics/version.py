@@ -1,1 +1,1 @@
-__version__ = [1,0, 10, "dev"]
+djangopysics_version = [1,0, 10, "dev"]
