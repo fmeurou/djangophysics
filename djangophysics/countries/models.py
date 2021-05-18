@@ -116,12 +116,20 @@ class Country:
         """
         return countries.get(alpha_2=self.alpha_2)._fields
 
-    def currencies(self) -> []:
+    def currencies(self, *args, **kwargs) -> []:
         """
         Return a list of currencies used in this country
         """
+        from djangophysics.currencies.models import Currency
+        from djangophysics.currencies.models import CurrencyNotFoundError
         ci = CountryInfo(self.alpha_2)
-        return ci.currencies()
+        currencies = []
+        for currency in ci.currencies():
+            try:
+                currencies.append(Currency(code=currency))
+            except CurrencyNotFoundError:
+                pass
+        return currencies
 
     @property
     def unit_system(self) -> str:
@@ -227,13 +235,13 @@ class Country:
             ccache = caches['countries']
         except KeyError:
             ccache = cache
-        if not ccache.get(self.alpha_2, {}):
+        if not ccache.get(self.alpha_2):
             try:
                 info = CountryInfo(self.alpha_2).info()
             except KeyError:
                 info = {}
             ccache.set(self.alpha_2, info)
-        return ccache.get(self.alpha_2, {})
+        return ccache.get(self.alpha_2) or {}
 
     @property
     def region(self) -> str:
@@ -268,4 +276,7 @@ class Country:
         """
         Return country population
         """
-        return self.info.get('population', '')
+        try:
+            return int(self.info.get('population', ''))
+        except ValueError:
+            return 0

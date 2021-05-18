@@ -10,10 +10,12 @@ from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.translation import ugettext_lazy as _
+
 from djangophysics.converters.models import BaseConverter, \
     ConverterResult, ConverterResultDetail, \
     ConverterResultError
 from djangophysics.core.helpers import service
+from djangophysics.currencies.models import Currency
 
 try:
     RATE_SERVICE = settings.RATE_SERVICE
@@ -208,11 +210,11 @@ class RateManager(models.Manager):
             for i in range(len(rates) - 1):
                 from_cur, to_cur = rates[i:i + 2]
                 rate = self.find_rate(
-                        currency=from_cur,
-                        base_currency=to_cur,
-                        key=key,
-                        date_obj=date_obj,
-                        use_forex=False)
+                    currency=from_cur,
+                    base_currency=to_cur,
+                    key=key,
+                    date_obj=date_obj,
+                    use_forex=False)
                 if rate:
                     conv_value *= rate.value
                 else:
@@ -288,6 +290,14 @@ class Rate(BaseRate):
         )
         result = converter.convert()
         return result
+
+    @property
+    def currency_obj(self):
+        return Currency(self.currency)
+
+    @property
+    def base_currency_obj(self):
+        return Currency(self.base_currency)
 
 
 @receiver(post_save, sender=Rate)
@@ -501,3 +511,37 @@ class RateConverter(BaseConverter):
                 result.errors.append(error)
         self.end_batch(result.end_batch())
         return result
+
+
+# Add rates attribute to base Currency class
+def rates_from(
+        self,
+        *arg,
+        currency: str,
+        value_date: date,
+        **kwargs):
+    return Rate.objects.filter(
+        user__isnull=True,
+        key__isnull=True,
+        currency=self.code,
+        base_currency=currency,
+        value_date=value_date)
+
+
+# Add rates attribute from Currency class
+def rates_to(
+        self,
+        *args,
+        currency: str,
+        value_date: date,
+        **kwargs):
+    return Rate.objects.filter(
+        user__isnull=True,
+        key__isnull=True,
+        base_currency=self.code,
+        currency=currency,
+        value_date=value_date)
+
+
+setattr(Currency, 'rates_from', rates_from)
+setattr(Currency, 'rates_to', rates_to)

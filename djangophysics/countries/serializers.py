@@ -1,7 +1,7 @@
 """
 Serializers for country classes
 """
-
+import importlib
 import gettext
 
 import pycountry
@@ -12,6 +12,11 @@ from rest_framework import serializers
 
 from .models import Country
 
+
+currency_serializer_module = importlib.import_module(
+    'djangophysics.currencies.serializers')
+currency_serializer_class = getattr(currency_serializer_module,
+                                    'CurrencySerializer')
 
 class CountrySerializer(serializers.Serializer):
     """
@@ -111,6 +116,15 @@ class CountryDetailSerializer(serializers.Serializer):
         label="Main unit system for this country")
     translated_name = serializers.SerializerMethodField(
         label="Country translated name")
+    currencies = currency_serializer_class(many=True,
+        label="Currencies for this country")
+
+    @swagger_serializer_method(
+        serializer_or_field=
+        "djangocurrency.currencies.serializers.CurrencySerializer"
+    )
+    def get_currency(self, obj: Country) -> []:
+        return obj.currencies()
 
     @swagger_serializer_method(serializer_or_field=serializers.CharField)
     def get_region(self, obj: Country) -> str:
