@@ -32,7 +32,7 @@ class Command(BaseCommand):
             "-s",
             '--service',
             type=str,
-            help="Rate service name. (forex, currencylayer, or other)"
+            help="Rate service name. (ecb, forex, currencylayer, or other)"
                  "Defaults to forex. See SERVICES in settings")
 
     def handle(self, *args, **options):
@@ -50,7 +50,7 @@ class Command(BaseCommand):
         except ValueError:
             print("invalid dates")
             exit(-1)
-        rate_service = options.get('service') or 'forex'
+        rate_service = options.get('service') or 'ecb'
 
         for currency in Currency.all_currencies():
             self.stdout.write(
