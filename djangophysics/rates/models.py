@@ -513,35 +513,38 @@ class RateConverter(BaseConverter):
         return result
 
 
-# Add rates attribute to base Currency class
-def rates_from(
+def rate_from(
         self,
         *arg,
         currency: str,
         value_date: date,
         **kwargs):
-    return Rate.objects.filter(
-        user__isnull=True,
-        key__isnull=True,
+    """
+    Return rate at a given date
+    Used for extension of Currency without user context for GraphQL interface
+    """
+    return Rate.objects.find_rate(
         currency=self.code,
         base_currency=currency,
-        value_date=value_date)
+        date_obj=value_date)
 
 
-# Add rates attribute from Currency class
-def rates_to(
+def rate_to(
         self,
         *args,
         currency: str,
         value_date: date,
         **kwargs):
-    return Rate.objects.filter(
-        user__isnull=True,
-        key__isnull=True,
+    """
+    Return rate at a given date
+    Used for extension of Currency without user context for GraphQL interface
+    """
+    return Rate.objects.find_rate(
         base_currency=self.code,
         currency=currency,
-        value_date=value_date)
+        date_obj=value_date)
 
 
-setattr(Currency, 'rates_from', rates_from)
-setattr(Currency, 'rates_to', rates_to)
+# Add rates attribute from Currency class
+setattr(Currency, 'rate_from', rate_from)
+setattr(Currency, 'rate_to', rate_to)
