@@ -16,6 +16,9 @@ from rest_framework.test import APIClient
 from .models import Rate, RateConverter, NoRateFound
 from .serializers import RateAmountSerializer
 
+CURRENT_YEAR = datetime.date.today().year
+CURRENT_MONTH = datetime.date.today().month
+CURRENT_DAY = datetime.date.today().day
 
 class RateTest(TestCase):
     """
@@ -28,7 +31,7 @@ class RateTest(TestCase):
         """
         Setup test environment
         """
-        settings.RATE_SERVICE = 'forex'
+        settings.RATE_SERVICE = 'ecb'
         self.user, created = User.objects.get_or_create(
             username='test',
             email='test@ipd.com'
@@ -41,12 +44,12 @@ class RateTest(TestCase):
             {
                 'currency': 'USD',
                 'amount': 100,
-                'date_obj': '2020-07-22'
+                'date_obj': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-22'
             },
             {
                 'currency': 'AUD',
                 'amount': 50,
-                'date_obj': '2020-07-23'
+                'date_obj': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-23'
             },
         ]
         self.trash_amounts = [
@@ -57,10 +60,10 @@ class RateTest(TestCase):
             },
             {
                 'currency': 'LOL',
-                'date_obj': '2020-07-23'
+                'date_obj': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-23'
             },
             {
-                'date_obj': '2020-07-23'
+                'date_obj': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-23'
             },
             {
                 'currency': 'JPY',
@@ -80,7 +83,7 @@ class RateTest(TestCase):
         """
         rates = Rate.objects.fetch_rates(
             base_currency=self.base_currency,
-            date_obj=date(year=2020, month=6, day=1))
+            date_obj=date(year=CURRENT_YEAR, month=CURRENT_MONTH, day=1))
         self.assertIsNotNone(rates)
 
     def test_fetch_rate(self):
@@ -98,7 +101,7 @@ class RateTest(TestCase):
         """
         rate = Rate.objects.fetch_rates(
             base_currency=self.base_currency, currency=self.currency,
-            date_obj=date(year=2020, month=6, day=1)
+            date_obj=date(year=CURRENT_YEAR, month=CURRENT_MONTH, day=1)
         )
         self.assertIsNotNone(rate)
 
@@ -175,7 +178,7 @@ class RateTest(TestCase):
             currency='AUD',
             base_currency='AFN',
             value=0.123,
-            value_date='2021-01-01'
+            value_date=f'{CURRENT_YEAR}-{CURRENT_MONTH}-01'
         )
         Rate.objects.create(
             user=self.user,
@@ -183,7 +186,7 @@ class RateTest(TestCase):
             currency='AFN',
             base_currency='JPY',
             value=200,
-            value_date='2021-01-01'
+            value_date=f'{CURRENT_YEAR}-{CURRENT_MONTH}-01'
         )
         Rate.objects.create(
             user=self.user,
@@ -191,11 +194,11 @@ class RateTest(TestCase):
             currency='JPY',
             base_currency='BND',
             value=13,
-            value_date='2021-01-01'
+            value_date=f'{CURRENT_YEAR}-{CURRENT_MONTH}-01'
         )
         rates = Rate.objects.currency_shortest_path(
             currency='AUD', base_currency='BND',
-            key=self.key, date_obj='2021-01-01')
+            key=self.key, date_obj=f'{CURRENT_YEAR}-{CURRENT_MONTH}-01')
         self.assertEqual(rates, ['AUD', 'AFN', 'JPY', 'BND'])
 
     def test_find_mixed_rate_chain(self):
@@ -209,7 +212,7 @@ class RateTest(TestCase):
             currency='ARS',
             base_currency='AFN',
             value=0.123,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         Rate.objects.create(
             user=self.user,
@@ -217,7 +220,7 @@ class RateTest(TestCase):
             currency='AFN',
             base_currency='BND',
             value=200,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         Rate.objects.create(
             user=self.user,
@@ -225,7 +228,7 @@ class RateTest(TestCase):
             currency='BND',
             base_currency='JPY',
             value=13,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         rates = Rate.objects.currency_shortest_path(
             currency='ARS', base_currency='EUR',
@@ -272,7 +275,7 @@ class RateTest(TestCase):
             currency='ARS',
             base_currency='AFN',
             value=0.123,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         Rate.objects.create(
             user=self.user,
@@ -280,7 +283,7 @@ class RateTest(TestCase):
             currency='AFN',
             base_currency='BND',
             value=200,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         Rate.objects.create(
             user=self.user,
@@ -288,7 +291,7 @@ class RateTest(TestCase):
             currency='BND',
             base_currency='JPY',
             value=13,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         rate = Rate.objects.find_rate(
             base_currency='JPY',
@@ -308,7 +311,7 @@ class RateTest(TestCase):
             currency='ARS',
             base_currency='AFN',
             value=0.123,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         Rate.objects.create(
             user=self.user,
@@ -316,7 +319,7 @@ class RateTest(TestCase):
             currency='AFN',
             base_currency='BND',
             value=200,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         Rate.objects.create(
             user=self.user,
@@ -324,12 +327,12 @@ class RateTest(TestCase):
             currency='BND',
             base_currency='JPY',
             value=13,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         jpy_eur = Rate.objects.get(
             base_currency='EUR',
             currency='JPY',
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         rate = Rate.objects.find_rate(
             base_currency='EUR',
@@ -350,7 +353,7 @@ class RateTest(TestCase):
             currency='ARS',
             base_currency='AFN',
             value=0.123,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         Rate.objects.create(
             user=self.user,
@@ -358,7 +361,7 @@ class RateTest(TestCase):
             currency='AFN',
             base_currency='BND',
             value=200,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         Rate.objects.create(
             user=self.user,
@@ -366,7 +369,7 @@ class RateTest(TestCase):
             currency='BND',
             base_currency='JPY',
             value=13,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         jpy_eur_custom = Rate.objects.create(
             user=self.user,
@@ -374,18 +377,18 @@ class RateTest(TestCase):
             currency='JPY',
             base_currency='EUR',
             value=100,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         Rate.objects.get(
             base_currency='EUR',
             currency='JPY',
             user__isnull=True,
-            value_date=datetime.date.today()
+            value_date=datetime.date.today() - datetime.timedelta(1)
         )
         rate = Rate.objects.find_rate(
             base_currency='EUR',
             currency='ARS',
-            date_obj=datetime.date.today(),
+            date_obj=datetime.date.today() - datetime.timedelta(1),
             key=self.key)
         self.assertEqual(rate.value, 0.123 * 200 * 13 * jpy_eur_custom.value)
 
@@ -401,7 +404,7 @@ class RateAPITest(TestCase):
         """
         Setup test environment
         """
-        settings.RATE_SERVICE = 'forex'
+        settings.RATE_SERVICE = 'ecb'
         self.user, created = User.objects.get_or_create(
             username='test',
             email='test@ipd.com'
@@ -414,12 +417,12 @@ class RateAPITest(TestCase):
             {
                 'currency': 'USD',
                 'amount': 100,
-                'date_obj': '2020-07-22'
+                'date_obj': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-22'
             },
             {
                 'currency': 'AUD',
                 'amount': 50,
-                'date_obj': '2020-07-23'
+                'date_obj': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-23'
             },
         ]
         self.trash_amounts = [
@@ -430,10 +433,10 @@ class RateAPITest(TestCase):
             },
             {
                 'currency': 'LOL',
-                'date_obj': '2020-07-23'
+                'date_obj': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-23'
             },
             {
-                'date_obj': '2020-07-23'
+                'date_obj': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-23'
             },
             {
                 'currency': 'JPY',
@@ -453,7 +456,7 @@ class RateAPITest(TestCase):
                 'key': self.key,
                 'currency': 'USD',
                 'base_currency': 'EUR',
-                'value_date': '2020-01-01',
+                'value_date': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-01',
                 'value': 1.10,
             }
         )
@@ -479,7 +482,7 @@ class RateAPITest(TestCase):
                 'key': '',
                 'currency': 'USD',
                 'base_currency': 'EUR',
-                'value_date': '2020-01-01',
+                'value_date': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-01',
                 'value': 1.10,
             }
         )
@@ -525,7 +528,7 @@ class RateAPITest(TestCase):
                 'key': self.key,
                 'currency': 'USD',
                 'base_currency': 'EUR',
-                'value_date': '2020-01-01',
+                'value_date': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-01',
                 'value': 1.10,
             }
         )
@@ -561,7 +564,7 @@ class RateAPITest(TestCase):
                 'key': self.key,
                 'currency': 'USD',
                 'base_currency': 'EUR',
-                'value_date': '2020-01-01',
+                'value_date': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-01',
                 'value': 1.10,
             }
         )
@@ -590,7 +593,7 @@ class RateAPITest(TestCase):
                 'key': self.key,
                 'currency': 'USD',
                 'base_currency': 'EUR',
-                'value_date': '2020-01-01',
+                'value_date': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-01',
                 'value': 1.10,
             }
         )
@@ -611,6 +614,9 @@ class RateAPITest(TestCase):
         """
         Test key_isnull filter
         """
+        Rate.objects.fetch_rates(
+            base_currency=self.base_currency,
+            currency=self.currency)
         client = APIClient()
         token = Token.objects.get(user__username=self.user.username)
         client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
@@ -620,7 +626,7 @@ class RateAPITest(TestCase):
                 'key': self.key,
                 'currency': 'USD',
                 'base_currency': 'EUR',
-                'value_date': '2020-01-01',
+                'value_date': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-01',
                 'value': 1.10,
             }
         )
@@ -650,7 +656,7 @@ class RateAPITest(TestCase):
                 'key': self.key,
                 'currency': 'USD',
                 'base_currency': 'EUR',
-                'value_date': '2020-01-01',
+                'value_date': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-01',
                 'value': 1.10,
             }
         )
@@ -677,7 +683,7 @@ class RateAPITest(TestCase):
                 'key': self.key,
                 'currency': 'USD',
                 'base_currency': 'EUR',
-                'value_date': '2020-01-01',
+                'value_date': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-01',
                 'value': 1.10,
             }
         )
@@ -688,7 +694,7 @@ class RateAPITest(TestCase):
                 'key': self.key,
                 'currency': 'USD',
                 'base_currency': 'EUR',
-                'value_date': '2020-01-02',
+                'value_date': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-02',
                 'value': 1.20,
             }
         )
@@ -712,7 +718,7 @@ class RateAPITest(TestCase):
                 'key': self.key,
                 'currency': 'USD',
                 'base_currency': 'EUR',
-                'value_date': '2020-01-01',
+                'value_date': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-01',
                 'value': 1.10,
             }
         )
@@ -754,8 +760,8 @@ class RateAPITest(TestCase):
                 'key': self.key,
                 'currency': 'USD',
                 'base_currency': 'EUR',
-                'from_date': '2020-01-01',
-                'to_date': '2020-09-01',
+                'from_date': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-01',
+                'to_date': f'{CURRENT_YEAR}-{CURRENT_MONTH}-01',
                 'value': 1.10
             }
         )
@@ -763,9 +769,10 @@ class RateAPITest(TestCase):
         self.assertEqual(
             len(post_response.json()),
             (datetime.date(
-                year=2020,
-                month=9,
-                day=1) - datetime.date(year=2020, month=1, day=1)).days + 1)
+                year=CURRENT_YEAR,
+                month=CURRENT_MONTH,
+                day=1) - datetime.date(
+                year=CURRENT_YEAR, month=CURRENT_MONTH-1, day=1)).days + 1)
 
     def test_latest_currency_request(self):
         """
@@ -780,8 +787,8 @@ class RateAPITest(TestCase):
                 'key': self.key,
                 'currency': 'USD',
                 'base_currency': 'EUR',
-                'from_date': '2020-01-01',
-                'to_date': '2020-09-01',
+                'from_date': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-01',
+                'to_date': f'{CURRENT_YEAR}-{CURRENT_MONTH}-01',
                 'value': 1.10
             }
         )
@@ -814,9 +821,11 @@ class RateConverterTest(TestCase):
         """
         setup test environment
         """
-        settings.RATE_SERVICE = 'forex'
-        from_date = datetime.date(year=2020, month=7, day=20)
-        to_date = datetime.date(year=2020, month=7, day=25)
+        settings.RATE_SERVICE = 'ecb'
+        from_date = datetime.date(year=CURRENT_YEAR,
+                                  month=CURRENT_MONTH-1, day=20)
+        to_date = datetime.date(year=CURRENT_YEAR,
+                                month=CURRENT_MONTH-1, day=25)
         Rate.objects.fetch_rates(
             base_currency=self.base_currency,
             date_obj=from_date,
@@ -830,12 +839,12 @@ class RateConverterTest(TestCase):
             {
                 'currency': 'USD',
                 'amount': 100,
-                'date_obj': '2020-07-22'
+                'date_obj': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-22'
             },
             {
                 'currency': 'AUD',
                 'amount': 50,
-                'date_obj': '2020-07-23'
+                'date_obj': f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-23'
             },
         ]
         self.trash_amounts = [
@@ -846,10 +855,10 @@ class RateConverterTest(TestCase):
             },
             {
                 'currency': 'LOL',
-                'date_obj': '2020-07-23'
+                'date_obj':  f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-23'
             },
             {
-                'date_obj': '2020-07-23'
+                'date_obj':  f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-23'
             },
             {
                 'currency': 'JPY',
@@ -908,16 +917,18 @@ class RateConverterTest(TestCase):
         """
         Rate.objects.fetch_rates(
             base_currency='EUR', currency='AUD',
-            date_obj=datetime.date(year=2020, month=7, day=23))
+            date_obj=datetime.date(year=CURRENT_YEAR,
+                                   month=CURRENT_MONTH-1, day=23))
         Rate.objects.fetch_rates(
             base_currency='JPY', currency='EUR',
-            date_obj=datetime.date(year=2020, month=7, day=23))
+            date_obj=datetime.date(year=CURRENT_YEAR,
+                                   month=CURRENT_MONTH-1, day=23))
         converter = RateConverter(self.user, base_currency='JPY')
         amounts = [
             {
                 'currency': 'AUD',
                 'amount': 50,
-                'date_obj': '2020-07-23'
+                'date_obj':  f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-23'
             },
         ]
         converter.add_data(amounts)
@@ -943,9 +954,11 @@ class RateConverterAPITest(TestCase):
         """
         setup test environment
         """
-        settings.RATE_SERVICE = 'forex'
-        from_date = datetime.date(year=2020, month=7, day=20)
-        to_date = datetime.date(year=2020, month=7, day=25)
+        settings.RATE_SERVICE = 'ecb'
+        from_date = datetime.date(year=CURRENT_YEAR,
+                                  month=CURRENT_MONTH-1, day=20)
+        to_date = datetime.date(year=CURRENT_YEAR,
+                                month=CURRENT_MONTH-1, day=25)
         Rate.objects.fetch_rates(
             base_currency=self.base_currency,
             date_obj=from_date,
@@ -959,12 +972,12 @@ class RateConverterAPITest(TestCase):
             {
                 'currency': 'USD',
                 'amount': 100,
-                'date_obj': '2020-07-22'
+                'date_obj':  f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-22'
             },
             {
                 'currency': 'AUD',
                 'amount': 50,
-                'date_obj': '2020-07-23'
+                'date_obj':  f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-23'
             },
         ]
         self.trash_amounts = [
@@ -975,10 +988,10 @@ class RateConverterAPITest(TestCase):
             },
             {
                 'currency': 'LOL',
-                'date_obj': '2020-07-23'
+                'date_obj':  f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-23'
             },
             {
-                'date_obj': '2020-07-23'
+                'date_obj':  f'{CURRENT_YEAR}-{CURRENT_MONTH-1}-23'
             },
             {
                 'currency': 'JPY',

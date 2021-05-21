@@ -3,6 +3,7 @@ ECB Open Data service
 """
 import io
 import logging
+import os
 import zipfile
 from datetime import date as dt
 from datetime import datetime, timedelta
@@ -28,6 +29,7 @@ SOURCE_TYPES = {
 class ECBService(RateService):
     _available_currencies = None
     _rates_cache = None
+    _instance = None
 
     def __init__(self):
         self._rates_cache = {}
@@ -37,12 +39,20 @@ class ECBService(RateService):
         self._available_currencies = rates_grid[0][1:]
 
     def _extract_rates(self, rates_grid):
-        self._rates_cache = {
-            datetime.strptime(line[0], '%d %B %Y').date(): {
-                rates_grid[0][i+1]: float(cell) for i, cell in enumerate(line[1:])
-            }
-            for line in rates_grid[1:]
-        }
+        for line in rates_grid[1:]:
+            try:
+                d = datetime.strptime(line[0], '%d %B %Y').date()
+            except ValueError:
+                try:
+                    d = datetime.strptime(line[0], '%Y-%m-%d').date()
+                except ValueError as e:
+                    raise RatesNotAvailableError(str(e)) from e
+            self._rates_cache[d] = {}
+            for i, cell in enumerate(line[1:]):
+                try:
+                    self._rates_cache[d][rates_grid[0][i + 1]] = float(cell)
+                except ValueError:
+                    pass
 
     def _fetch_rates(self, source_type):
         """
@@ -53,16 +63,36 @@ class ECBService(RateService):
         if response.status_code == 200:
             try:
                 z = zipfile.ZipFile(io.BytesIO(response.content))
-                content = z.read(source['filename'])
-                rates_grid = [l.split(', ')[:-1] for l in
-                              content.decode('ASCII').split('\n')][:-1]
-                print(rates_grid)
-                self._extract_currencies(rates_grid=rates_grid)
-                self._extract_rates(rates_grid=rates_grid)
-            except (IndexError, ValueError, TypeError) as e:
-                raise RatesNotAvailableError(str(e)) from e
+                z.extract(
+                    source['filename'],
+                    path=getattr(settings, 'TMP_DIR', '/tmp'))
+            except zipfile.BadZipfile as e:
+                raise RatesNotAvailableError("Incorrect source response")
         else:
             raise RatesNotAvailableError(response.text)
+
+    def _read_rates(self, source_type):
+        """
+        Read rates from temporary file
+        """
+        filepath = os.path.join(
+            getattr(settings, 'TMP_DIR', '/tmp'),
+            SOURCE_TYPES[source_type]['filename']
+        )
+        now = datetime.now()
+        if not os.path.exists(filepath) or \
+                (now - datetime.fromtimestamp(
+                    os.stat(path=filepath).st_mtime)).days >= 1:
+            self._fetch_rates(source_type=source_type)
+        try:
+            with open(filepath) as source_file:
+                content = source_file.read()
+            rates_grid = [l.split(',')[:-1] for l in
+                          content.split('\n')][:-1]
+            self._extract_currencies(rates_grid=rates_grid)
+            self._extract_rates(rates_grid=rates_grid)
+        except (IOError, IndexError, ValueError, TypeError) as e:
+            raise RatesNotAvailableError(str(e)) from e
 
     def available_currencies(self) -> Iterator:
         """
@@ -72,7 +102,7 @@ class ECBService(RateService):
 
     def _get_from_range(self, start_date, end_date):
         filtered_rates = {}
-        dates = [start_date + timedelta(i)
+        dates = [(start_date + timedelta(i))
                  for i in range((end_date - start_date).days + 1)]
         for d in dates:
             try:
@@ -89,8 +119,11 @@ class ECBService(RateService):
         Get conversion rate between base currency and currency
         :param rate_date: list of rates at a given date
         """
-        denum = 1 if base_currency == 'EUR' else rate_date[base_currency]
-        num = 1 if currency == 'EUR' else rate_date[currency]
+        try:
+            denum = 1 if base_currency == 'EUR' else rate_date[base_currency]
+            num = 1 if currency == 'EUR' else rate_date[currency]
+        except KeyError as e:
+            raise RatesNotAvailableError(str(e)) from e
         if denum:
             return num / denum
         else:
@@ -107,19 +140,22 @@ class ECBService(RateService):
             rates_grid[date_obj] = self._rates_cache[date_obj]
         output = []
         for d, date_rates in rates_grid.items():
-            output.append(
-                {
-                    'base_currency': base_currency,
-                    'currency': currency,
-                    'date': d,
-                    'value': self._get_rate(
-                        rate_date=date_rates,
-                        base_currency=base_currency,
-                        currency=currency
-                    )
-                }
-            )
-        print(output)
+            try:
+                output.append(
+                    {
+                        'base_currency': base_currency.strip(),
+                        'currency': currency.strip(),
+                        'date': d,
+                        'value': self._get_rate(
+                            rate_date=date_rates,
+                            base_currency=base_currency,
+                            currency=currency
+                        )
+                    }
+                )
+            except RatesNotAvailableError as e:
+                logging.warning(f"Rate not {base_currency} -> {currency} "
+                                f"not available at date {d}")
         return output
 
     def _fetch_all(self, base_currency: str,
@@ -127,8 +163,8 @@ class ECBService(RateService):
         output = []
         for currency in self._available_currencies:
             output.extend(self._fetch_single(
-                base_currency=base_currency,
-                currency=currency,
+                base_currency=base_currency.strip(),
+                currency=currency.strip(),
                 date_obj=date_obj,
                 to_obj=to_obj
             ))
@@ -140,9 +176,9 @@ class ECBService(RateService):
                     date_obj: dt = dt.today(),
                     to_obj: dt = None) -> []:
         if date_obj == dt.today():
-            self._fetch_rates('latest')
+            self._read_rates('latest')
         else:
-            self._fetch_rates('historical')
+            self._read_rates('historical')
         if currency:
             return self._fetch_single(
                 base_currency=base_currency,

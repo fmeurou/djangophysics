@@ -95,4 +95,4 @@ SENDFILE_ROOT = '/var/apps/media'
 SENDFILE_URL = '/media'
 
 BASE_CURRENCY = 'EUR'
-RATE_SERVICE = 'forex'
+RATE_SERVICE = 'ecb'
