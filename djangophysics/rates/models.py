@@ -1,6 +1,7 @@
 """
 Models for Rates module
 """
+import logging
 import datetime
 from datetime import date, timedelta
 
@@ -114,7 +115,7 @@ class RateManager(models.Manager):
             if not rates:
                 return False
         except RatesNotAvailableError:
-            print("fetch_rates: Rates not available")
+            logging.warning("fetch_rates: Rates not available")
             return False
         return self.__sync_rates__(rates=rates, base_currency=base_currency)
 
