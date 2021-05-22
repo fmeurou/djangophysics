@@ -3,7 +3,7 @@ Djangophysics GraphQL schemas
 """
 from ariadne import QueryType, gql, make_executable_schema
 
-from ..countries.models import Country
+from ..countries.models import Country, CountrySubdivision
 from ..currencies.models import Currency
 from ..rates.models import Rate
 from ..units.models import UnitSystem, Dimension
@@ -64,13 +64,13 @@ type_defs = '''
     List of countries based on the ISO-3166
     """
     type Country {
-        "ISO3166 Name of the country"
+        "ISO 3166 Name of the country"
         name: String!,
-        "ISO3166 numeric value"
+        "ISO 3166 numeric value"
         numeric: Int!,
-        "ISO3166 alpha2 code"
+        "ISO 3166 alpha2 code"
         alpha_2: String!,
-        "ISO3166 alpha3 trigram"
+        "ISO 3166 alpha3 trigram"
         alpha_3: String!,
         "Name of the region the country belongs to"
         region: String,
@@ -94,11 +94,30 @@ type_defs = '''
         unit_system_obj: UnitSystem
     }
     
+    type CountrySubdivision {
+        "ISO 3166-2 Name of the subdivision"
+        name: String!,
+        "ISO 3166-2 Code of the subdivision"
+        code: String!,
+        "Subdivision type"
+        type: String,
+        "ISO 3166 Contry alpha_2"
+        country_code: String!,
+        "Country of the subdivision"
+        country: Country!,
+        "Subdivision parent code"
+        parent_code: String,
+        "Subdivision parent"
+        parent: CountrySubdivision,
+        "Subdivision children"
+        children: [CountrySubdivision]
+    }
+        
     """
     Conversion rate between two currencies
     """
     type Rate   {
-        "Currency ISO4217 code to convert to"
+        "Currency ISO 4217 code to convert to"
         currency: String!,
         "Currency object to convert to"
         currency_obj: Currency,
@@ -176,6 +195,12 @@ type_defs = '''
         countries(term: String): [Country]
         "Country details"
         country(alpha_2: String!): Country
+        "Searchable list of subdivisions for a country"
+        country_subdivisions_search(search_term: String!, country_code: String, ordering: String): [CountrySubdivision]
+        "List of subdivisions for a country"
+        country_subdivisions(alpha_2: String!): [CountrySubdivision]
+        "Country subdivision details"
+        country_subdivision(alpha_2: String!, code: String!): CountrySubdivision
         "Searchable list of currencies"
         currencies(term: String): [Currency]
         "Currency details"
@@ -238,6 +263,48 @@ def resolve_country(_, info, alpha_2):
     :param alpha_2: ISO3166 alpha2 code
     """
     return Country(alpha_2)
+
+
+@query.field("country_subdivisions")
+def resolve_country_subdivisions(_, info, alpha_2):
+    """
+    Country resolver
+    :param info: QraphQL request context
+    :param alpha_2: ISO 3166 alpha2 code
+    :param code: ISO 3166-2 code
+    """
+    return CountrySubdivision.list_for_country(country_code=alpha_2)
+
+
+@query.field("country_subdivisions_search")
+def resolve_country_subdivision_search(
+        _, info,
+        search_term: str,
+        country_code: str = None,
+        ordering: str = 'name'):
+    """
+    Country resolver
+    :param info: QraphQL request context
+    :param search term: search for a term in name, code and type
+    :param country_code: ISO 3166 code
+    :param ordering: order on field name, code or type
+    """
+    return CountrySubdivision.search(
+        search_term=search_term,
+        country_code=country_code,
+        ordering=ordering
+    )
+
+
+@query.field("country_subdivision")
+def resolve_country_subdivision(_, info, alpha_2, code):
+    """
+    Country resolver
+    :param info: QraphQL request context
+    :param alpha_2: ISO 3166 alpha2 code
+    :param code: ISO 3166-2 code
+    """
+    return CountrySubdivision(code=code)
 
 
 @query.field("currencies")

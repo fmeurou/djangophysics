@@ -5,13 +5,13 @@ import os
 
 from django.conf import settings
 from django.test import TestCase
-from djangophysics.core.helpers import service
 from pycountry import countries
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from .models import Country
-from .serializers import CountrySerializer
+from djangophysics.core.helpers import service
+from .models import Country, CountrySubdivision, CountrySubdivisionNotFound
+from .serializers import CountrySerializer, CountrySubdivisionSerializer
 
 PELIAS_TEST_URL = 'https://api.geocode.earth/v1'
 TEST_ADDRESS = "Rue du Maine, 75014 Paris"
@@ -403,3 +403,148 @@ class GeocoderTestCase(TestCase):
             self.assertIn("FR", geocoder.parse_countries(data))
         else:
             print("GEOCODER_GOOGLE_KEY not set, skipping test")
+
+
+class CountrySubdivisionTestCase(TestCase):
+
+    def test_creation(self):
+        sd = CountrySubdivision(code="FR-72")
+        self.assertEqual(sd.name, "Sarthe")
+
+    def test_invalid_code(self):
+        self.assertRaises(
+            CountrySubdivisionNotFound,
+            CountrySubdivision,
+            code="not there")
+
+    def test_list_for_country(self):
+        sd = CountrySubdivision.list_for_country(country_code="FR")
+        self.assertEqual(len(sd), 125)
+
+    def test_list_for_wrong_country(self):
+        self.assertRaises(
+            CountrySubdivisionNotFound,
+            CountrySubdivision.list_for_country,
+            country_code="who is this ?"
+        )
+
+    def test_search(self):
+        sd = CountrySubdivision.search(search_term="toto")
+        self.assertEqual(len(sd), 1) # 'Totonicapán'
+        sd = CountrySubdivision.search(search_term="toto is not there")
+        self.assertEqual(len(sd), 0)  # 'Totonicapán'
+
+    def test_list_country_ordering(self):
+        sd_name = CountrySubdivision.list_for_country(
+            country_code="US",
+            ordering='name')
+        sd_code = CountrySubdivision.list_for_country(
+            country_code="US",
+            ordering='code')
+        sd_type = CountrySubdivision.list_for_country(
+            country_code="FR",
+            ordering='type')
+        self.assertEqual(sd_name[0].name, 'Alabama')
+        self.assertEqual(sd_name[-1].name, 'Wyoming')
+        self.assertEqual(sd_code[0].name, 'Alaska')
+        self.assertEqual(sd_code[-1].name, 'Wyoming')
+        self.assertEqual(sd_type[0].type, 'Dependency')
+        self.assertEqual(sd_type[-1].type, 'Overseas territorial collectivity')
+
+    def test_parent(self):
+        sd = CountrySubdivision(code='FR-72')
+        self.assertEqual(sd.parent_code, 'FR-PDL')
+        self.assertEqual(sd.parent.name, 'Pays-de-la-Loire')
+        sd = CountrySubdivision(code='US-WY')
+        self.assertIsNone(sd.parent)
+
+    def test_children(self):
+        sd = CountrySubdivision(code='FR-72')
+        self.assertEqual(len(sd.parent.children()), 5)
+        self.assertEqual(type(sd.parent.children()[0]), CountrySubdivision)
+        self.assertEqual(len(sd.parent.children(search_term="FR-72")), 1)
+
+class CountrySubdivisionAPITestCase(TestCase):
+
+    def test_list_request(self):
+        """
+        Testing the list of country subdivisions
+        """
+        client = APIClient()
+        response = client.get('/countries/FR/subdivisions/', format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data),
+                         len(CountrySubdivision.list_for_country(country_code='FR')))
+        self.assertEqual(response.data[0].get('name'), 'Ain')
+
+    def test_list_sorted_code_request(self):
+        """
+        testing code ordering on List API
+        """
+        client = APIClient()
+        response = client.get(
+            '/countries/FR/subdivisions/',
+            data={'ordering': 'code'},
+            format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            len(response.data),
+            len(CountrySubdivision.list_for_country(country_code='FR')))
+        self.assertEqual(response.data[0].get('name'), 'Ain')
+
+    def test_retrieve_request(self):
+        """
+        Testing retrieve on country subdivision
+        """
+        client = APIClient()
+        response = client.get(
+            '/countries/US/subdivisions/US-OK/',
+            format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        csd = CountrySubdivisionSerializer(data=response.json())
+        self.assertTrue(csd.is_valid())
+        sd = csd.create(csd.validated_data)
+        self.assertEqual(sd.name, 'Oklahoma')
+        self.assertEqual(sd.code, 'US-OK')
+        self.assertEqual(sd.type, 'State')
+        self.assertEqual(sd.country_code, 'US')
+
+    def test_retrieve_parent(self):
+        """
+        Testing retrieve country subdivision parent
+        """
+        client = APIClient()
+        response = client.get('/countries/FR/subdivisions/FR-72/parent/',
+                              format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        csd = CountrySubdivisionSerializer(data=response.json())
+        self.assertTrue(csd.is_valid())
+        sd = csd.create(csd.validated_data)
+        self.assertEqual(sd.name, 'Pays-de-la-Loire')
+
+    def test_retrieve_children(self):
+        """
+        Testing retrieve on country subdivision children
+        """
+        client = APIClient()
+        response = client.get(
+            '/countries/FR/subdivisions/FR-PDL/children/',
+            format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        csd = CountrySubdivisionSerializer(data=response.json(), many=True)
+        self.assertTrue(csd.is_valid())
+        self.assertEqual(len(response.json()), 5)
+
+    def test_retrieve_children_search(self):
+        """
+        Testing retrieve on country subdivision children
+        """
+        client = APIClient()
+        response = client.get(
+            '/countries/FR/subdivisions/FR-PDL/children/',
+            data={'search': 'FR-72'},
+            format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        csd = CountrySubdivisionSerializer(data=response.json(), many=True)
+        self.assertTrue(csd.is_valid())
+        self.assertEqual(len(response.json()), 1)

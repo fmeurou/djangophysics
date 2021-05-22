@@ -42,9 +42,10 @@ class Currency:
     number = 0
     value = None
 
-    def __init__(self, code):
+    def __init__(self, code: str):
         """
         Initialize an iso4217.Currency instance
+        :param code: currency ISO 4217 code
         """
         try:
             i = Iso4217(code.upper())
@@ -106,7 +107,6 @@ class Currency:
         List countries using this currency
         :return: List of Country objects
         """
-        print("currency countries")
         a2s = CURRENCY_COUNTRIES.get(self.code, [])
         return [Country(alpha_2) for alpha_2 in a2s]
 
@@ -118,7 +118,7 @@ class Currency:
         """
         try:
             country = Country(alpha2)
-            return [Currency(cur) for cur in country.currencies()]
+            return [Currency(cur.code) for cur in country.currencies()]
         except CurrencyNotFoundError as e:
             logging.error("Error fetching currency")
             logging.error(e)
