@@ -1,6 +1,7 @@
 """
 GraphQL test module
 """
+import datetime
 from json import dumps, loads
 from django.test import TestCase
 from rest_framework.test import APIClient
@@ -209,6 +210,7 @@ class GraphQLTest(TestCase):
         """
         Test Currency rates_to and rates_from functions
         """
+        d = (datetime.date.today() - datetime.timedelta(1)).strftime('%Y-%m-%d')
         Rate.objects.fetch_rates(
             currency="EUR",
             base_currency="USD"
@@ -219,35 +221,36 @@ class GraphQLTest(TestCase):
         )
         gql = {
             'query': """
-             {
-              currency(code:"EUR") {
+            |
+              currency(code:"EUR") |
               code,
-              rate_from(currency:"USD", value_date:"2021-03-21") {
+              rate_from(currency:"USD", value_date:"{d}") |
                 currency,
                 base_currency,
                 value
-              },
-              rate_to(currency:"USD", value_date:"2021-03-21") {
+              ||,
+              rate_to(currency:"USD", value_date:"{d}") |
                 currency,
                 base_currency,
                 value
-              }
-            }
-            }
-            """
+              ||
+            ||
+            ||
+            """.format(d=d).replace('||', '}').replace('|', '{')
         }
         response = self.client.post(
             '/graphql',
             data=gql,
             format='json')
         resp = response.json()
+        print(resp['data']['currency'])
         self.assertIsNone(resp.get('errors'))
         self.assertIsNotNone(resp.get('data'))
         self.assertIn('currency', resp['data'])
         self.assertEqual(resp['data']['currency']['code'], "EUR")
         self.assertEqual(
-            resp['data']['currency']['rates_to']['currency']['code'],
+            resp['data']['currency']['rate_to']['currency'],
             "USD")
         self.assertEqual(
-            resp['data']['currency']['rates_from']['base_currency']['code'],
+            resp['data']['currency']['rate_from']['base_currency'],
             "USD")

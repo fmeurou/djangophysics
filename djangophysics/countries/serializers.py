@@ -195,24 +195,24 @@ class CountrySubdivisionSerializer(serializers.Serializer):
     Serializer for Country
     """
     name = serializers.CharField(
-        label="ISO-3166-2 Country subdivision name",
-        read_only=True)
+        label="ISO-3166-2 Country subdivision name"
+    )
     code = serializers.CharField(
-        label="ISO 3166-2 code value",
-        read_only=True)
+        label="ISO 3166-2 code value"
+    )
     type = serializers.CharField(
         label="subdivision type")
     country_code = serializers.CharField(
-        label="ISO 3166-1 country code",
-        read_only=True)
+        label="ISO 3166-1 country code"
+    )
     translated_name = serializers.SerializerMethodField(
         label="Translated country subdivision name")
 
     @staticmethod
     def validate_code(code):
         """
-        Validate that alpha 2 code is valid
-        :param alpha_2: alpha 2 code from ISO3166
+        Validate that code is valid
+        :param code: code from IS O3166-2
         """
         if subdivisions.get(code=code):
             return code

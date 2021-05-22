@@ -278,6 +278,11 @@ class CountrySubdivisionViewset(ViewSet):
         openapi.IN_QUERY,
         description="language",
         type=openapi.TYPE_STRING)
+    search = openapi.Parameter(
+        'search',
+        openapi.IN_QUERY,
+        description="Search term",
+        type=openapi.TYPE_STRING)
     ordering = openapi.Parameter(
         'ordering', openapi.IN_QUERY,
         description="Sort on name, code, type. "
@@ -290,7 +295,7 @@ class CountrySubdivisionViewset(ViewSet):
     @method_decorator(cache_page(60 * 60 * 24))
     @method_decorator(vary_on_cookie)
     @swagger_auto_schema(
-        manual_parameters=[language, language_header, ordering],
+        manual_parameters=[language, language_header, search,  ordering],
         responses={200: country_subdivision_response})
     def list(self, request, alpha_2):
         """
@@ -301,10 +306,22 @@ class CountrySubdivisionViewset(ViewSet):
         try:
             country = Country(alpha_2=alpha_2)
             ordering = request.GET.get('ordering', 'name')
-            sd = CountrySubdivision.list_for_country(
-                country_code=alpha_2,
-                ordering=ordering
-            )
+            search = request.GET.get('search')
+            if search:
+                sd = CountrySubdivision.search(
+                    search_term=search,
+                    country_code=alpha_2,
+                    ordering=ordering
+                )
+            else:
+                try:
+                    sd = CountrySubdivision.list_for_country(
+                        country_code=alpha_2,
+                        ordering=ordering
+                    )
+                except CountrySubdivisionNotFound:
+                    return Response("Invalid country code",
+                            status=status.HTTP_404_NOT_FOUND)
             serializer = CountrySubdivisionSerializer(
                 sd,
                 many=True,
@@ -357,6 +374,34 @@ class CountrySubdivisionViewset(ViewSet):
                                 status=status.HTTP_404_NOT_FOUND)
             serializer = CountrySubdivisionSerializer(
                 sd.parent,
+                context={'request': request})
+            return Response(serializer.data,
+                            content_type="application/json")
+        except CountrySubdivisionNotFound:
+            return Response("Unknown country subdivision",
+                            status=HTTP_404_NOT_FOUND)
+
+    @method_decorator(cache_page(60 * 60 * 24))
+    @method_decorator(vary_on_cookie)
+    @swagger_auto_schema(manual_parameters=[language, language_header, search],
+                         responses={200: country_subdivision_response})
+    @action(['GET'],
+            detail=True,
+            url_path='children',
+            url_name='children')
+    def children(self, request, alpha_2: str, code: str):
+        """
+        Retrieve a Country based on its alpha 2 code
+        :param alpha_2: ISO 3166-1 alpha_2 code
+        :param code: ISO 3166-2 code
+        """
+        ordering = request.GET.get('ordering', 'name')
+        search = request.GET.get('search')
+        try:
+            sd = CountrySubdivision(code=code)
+            serializer = CountrySubdivisionSerializer(
+                sd.children(search_term=search, ordering=ordering),
+                many=True,
                 context={'request': request})
             return Response(serializer.data,
                             content_type="application/json")

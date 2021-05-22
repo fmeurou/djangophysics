@@ -7,7 +7,6 @@ import os
 import re
 from datetime import datetime
 
-import pycountry
 import pytz
 import requests
 from countryinfo import CountryInfo
@@ -279,7 +278,7 @@ class Country:
         return self.info.get('capital', '')
 
     @property
-    def population(self) -> str:
+    def population(self) -> int:
         """
         Return country population
         """
@@ -304,7 +303,6 @@ class CountrySubdivision:
     parent_code = None
 
     def __init__(self, code):
-        print(code)
         try:
             sd = subdivisions.get(code=code)
         except LookupError as e:
@@ -323,20 +321,32 @@ class CountrySubdivision:
     def list_for_country(cls, country_code, ordering='name'):
         if ordering not in ['code', 'name', 'type']:
             ordering = 'name'
-        return sorted([CountrySubdivision(code=r.code)
-                for r in subdivisions.get(country_code=country_code)],
-               key=lambda x: getattr(x, ordering))
-
+        try:
+            return sorted([CountrySubdivision(code=r.code)
+                       for r in subdivisions.get(country_code=country_code)],
+                      key=lambda x: getattr(x, ordering))
+        except TypeError as e:
+            raise CountrySubdivisionNotFound(str(e)) from e
 
     @classmethod
-    def search(cls, term):
+    def search(cls, search_term, ordering='name', country_code=None):
+        if ordering not in ['code', 'name', 'type']:
+            ordering = 'name'
         result = []
         for attr in ['code', 'name', 'type']:
-            result.extend(
-                [getattr(sd, 'code') for sd in subdivisions
-                 if term.lower() in getattr(sd, attr).lower()]
-            )
-        return sorted([CountrySubdivision(code=r) for r in set(result)], key=lambda x: x.name)
+            if country_code:
+                result.extend(
+                    [getattr(sd, 'code') for sd in subdivisions
+                     if search_term.lower() in getattr(sd, attr).lower()
+                     and sd.country_code.lower() == country_code.lower()]
+                )
+            else:
+                result.extend(
+                    [getattr(sd, 'code') for sd in subdivisions
+                     if search_term.lower() in getattr(sd, attr).lower()]
+                )
+        return sorted([CountrySubdivision(code=r) for r in set(result)],
+                      key=lambda x: getattr(x, ordering))
 
     @property
     def country(self):
@@ -354,5 +364,22 @@ class CountrySubdivision:
             return CountrySubdivision(code=self.parent_code)
         return None
 
-
-
+    def children(self, *args, search_term: str = None, ordering: str = 'name'):
+        """
+        List children of the subdivision
+        """
+        if ordering not in ['code', 'name', 'type']:
+            ordering = 'name'
+        if search_term:
+            return sorted(
+                [CountrySubdivision(code=sd.code)
+                 for sd in self.search(search_term=search_term)
+                 if sd.parent_code == self.code and
+                 sd.country_code == self.country_code],
+                key=lambda x: getattr(x, ordering))
+        else:
+            return sorted(
+                [CountrySubdivision(code=sd.code)
+                 for sd in self.list_for_country(country_code=self.country_code)
+                 if sd.parent_code == self.code],
+                key=lambda x: getattr(x, ordering))
