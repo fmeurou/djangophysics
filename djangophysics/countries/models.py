@@ -116,12 +116,6 @@ class Country:
         """
         return countries.get(alpha_2=self.alpha_2)._fields
 
-    def subdivisions(self):
-        """
-        List ISO 3166-2 subdivisions of a country
-        """
-        return countries.get(alpha_2=self.alpha_2)
-
     def currencies(self, *args, **kwargs) -> []:
         """
         Return a list of currencies used in this country
@@ -287,6 +281,16 @@ class Country:
         except ValueError:
             return 0
 
+    def subdivisions(self, *args, search_term=None, ordering='name'):
+        """
+        List ISO 3166-2 subdivisions of a country
+        """
+        return CountrySubdivision.list_for_country(
+            country_code=self.alpha_2,
+            search_term=search_term,
+            ordering=ordering
+        )
+
 
 class CountrySubdivisionNotFound(Exception):
     """
@@ -318,15 +322,22 @@ class CountrySubdivision:
         self.parent_code = sd.parent_code
 
     @classmethod
-    def list_for_country(cls, country_code, ordering='name'):
+    def list_for_country(cls, country_code, search_term=None, ordering='name'):
         if ordering not in ['code', 'name', 'type']:
             ordering = 'name'
-        try:
-            return sorted([CountrySubdivision(code=r.code)
-                       for r in subdivisions.get(country_code=country_code)],
-                      key=lambda x: getattr(x, ordering))
-        except TypeError as e:
-            raise CountrySubdivisionNotFound(str(e)) from e
+        if search_term:
+            return cls.search(
+                search_term=search_term,
+                country_code=country_code,
+                ordering=ordering
+            )
+        else:
+            try:
+                return sorted([CountrySubdivision(code=r.code)
+                               for r in subdivisions.get(country_code=country_code)],
+                              key=lambda x: getattr(x, ordering))
+            except TypeError as e:
+                raise CountrySubdivisionNotFound(str(e)) from e
 
     @classmethod
     def search(cls, search_term, ordering='name', country_code=None):
