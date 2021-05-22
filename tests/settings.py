@@ -315,6 +315,7 @@ SERVICES = {
         'google': 'djangophysics.countries.services.google.GoogleGeocoder',
     },
     'rates': {
+        'ecb': 'djangophysics.rates.services.ecb.ECBService',
         'forex': 'djangophysics.rates.services.forex.ForexService',
         'currencylayer':
             'djangophysics.rates.services.currencylayer.CurrencyLayerService'

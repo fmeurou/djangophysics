@@ -1,6 +1,8 @@
 """
 Models for Rates module
 """
+import logging
+import datetime
 from datetime import date, timedelta
 
 import networkx as nx
@@ -59,15 +61,26 @@ class RateManager(models.Manager):
         """
         output = []
         for rate in rates:
-            _rate, created = Rate.objects.get_or_create(
-                base_currency=base_currency,
-                currency=rate.get('currency'),
-                value_date=rate.get('date'),
-                user=None,
-                key=None
-            )
-            _rate.value = rate.get('value')
-            _rate.save()
+            try:
+                _rate, created = Rate.objects.get_or_create(
+                    base_currency=base_currency,
+                    currency=rate.get('currency'),
+                    value_date=rate.get('date'),
+                    user=None,
+                    key=None
+                )
+                _rate.value = rate.get('value')
+                _rate.save()
+            except Rate.MultipleObjectsReturned:
+                _rates = Rate.objects.filter(
+                    base_currency=base_currency,
+                    currency=rate.get('currency'),
+                    value_date=rate.get('date'),
+                    user=None,
+                    key=None
+                )
+                _rates.update(value=rate.get('value'))
+                _rate = _rates.first()
             output.append(_rate)
         return output
 
@@ -80,6 +93,8 @@ class RateManager(models.Manager):
         """
         Get rates from a service for a base currency
         and stores them in the database
+        If the date is the current date, the rate is not available
+        so we take the rate from the day before
         :param rate_service: Service class to fetch from
         :param currency: currency to obtain rate for
         :param base_currency: base currency to get rate from
@@ -88,6 +103,8 @@ class RateManager(models.Manager):
         :return: QuerySet of Rate
         """
         service_name = rate_service or settings.RATE_SERVICE
+        if date_obj == date.today():
+            date_obj = date_obj - datetime.timedelta(1)
         try:
             rates = service(
                 service_type='rates',
@@ -100,6 +117,7 @@ class RateManager(models.Manager):
             if not rates:
                 return False
         except RatesNotAvailableError:
+            logging.warning("fetch_rates: Rates not available")
             return False
         return self.__sync_rates__(rates=rates, base_currency=base_currency)
 
@@ -136,6 +154,8 @@ class RateManager(models.Manager):
         :param date_obj: Date to obtain the conversion rate for
         :return List of currency codes to go from currency to base currency
         """
+        if date_obj == date.today():
+            date_obj = date_obj - timedelta(1)
         rates = Rate.objects.filter(value_date=date_obj).filter(
             models.Q(user=None) | models.Q(key=key))
         rates_couples = rates.values(
@@ -151,7 +171,8 @@ class RateManager(models.Manager):
         try:
             return nx.shortest_path(
                 graph, currency, base_currency, weight='weight')
-        except nx.exception.NetworkXNoPath as exc:
+        except (nx.exception.NetworkXNoPath,
+                nx.exception.NodeNotFound) as exc:
             raise NoRateFound(
                 f"Rate {currency} to {base_currency} on "
                 f"key {key} at date {date_obj} does not exist") \
@@ -165,6 +186,8 @@ class RateManager(models.Manager):
                   use_forex: bool = False) -> BaseRate:
         """
         Find rate based on Floyd Warshall algorithm
+        If the date is the current date, the rate is not available
+        so we take the rate from the day before
         :param currency: source currency code
         :param base_currency: base currency code
         :param key: Key specific to a client
@@ -172,6 +195,8 @@ class RateManager(models.Manager):
         :param rate_service: Rate service to use
         :param use_forex: use rate service to fill the gaps
         """
+        if date_obj == date.today():
+            date_obj = date_obj - datetime.timedelta(1)
         if use_forex:
             if not self.fetch_rates(
                     base_currency=base_currency,
