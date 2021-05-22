@@ -77,7 +77,7 @@ type_defs = '''
         "Name of the subregion the country belongs to"
         subregion: String,
         "TLD associated with the country"
-        tld: String, 
+        tld: [String], 
         "Capital city"
         capital: String,
         "Population of the country"
