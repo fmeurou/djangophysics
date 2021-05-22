@@ -107,7 +107,6 @@ class Currency:
         List countries using this currency
         :return: List of Country objects
         """
-        print("currency countries")
         a2s = CURRENCY_COUNTRIES.get(self.code, [])
         return [Country(alpha_2) for alpha_2 in a2s]
 
