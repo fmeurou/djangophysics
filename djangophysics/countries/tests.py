@@ -105,6 +105,14 @@ class CountryTestCase(TestCase):
         country = Country('FR')
         self.assertIsNotNone(country.colors())
 
+    def test_subdivisions(self):
+        """
+        Test list of subdivisions per country
+        """
+        country = Country('FR')
+        self.assertEqual(len(country.subdivisions()), 125)
+        self.assertEqual(len(country.subdivisions(search_term='FR-PDL')), 1)
+
 
 class CountryAPITestCase(TestCase):
     """

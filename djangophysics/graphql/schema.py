@@ -82,6 +82,8 @@ type_defs = '''
         capital: String,
         "Population of the country"
         population: Int,
+        "Country subdivisions"
+        subdivisions: [CountrySubdivision],
         "List of colors of the flag"
         colors: [String], 
         "List of timezones of the country"
