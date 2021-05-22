@@ -11,6 +11,7 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.utils.translation import ugettext as _
 
+from djangophysics.countries.models import Country
 from djangophysics.converters.models import BaseConverter, ConverterResult, \
     ConverterResultDetail, ConverterResultError, ConverterLoadError
 from . import UNIT_EXTENDED_DEFINITION, DIMENSIONS, \
@@ -135,7 +136,8 @@ class UnitSystem:
         """
         Load custom units in registry
         """
-        if user and user.is_authenticated:
+        if user and type(user) == User and \
+                getattr(user, 'is_authenticated', None):
             if user.is_superuser:
                 qs = CustomUnit.objects.all()
             else:
@@ -247,9 +249,14 @@ class UnitSystem:
             unit_system=self.system,
             unit_str=unit)
 
-    def available_dimensions(self, ordering: str = 'name') -> {}:
+    def available_dimensions(
+            self,
+            *arg,
+            search_term: str = None,
+            ordering: str = 'name') -> {}:
         """
         Return available dimensions for the UnitSystem
+        :param search_term: filter dimensions on name
         :param ordering: sort result by attribute
         """
         descending = False
@@ -258,8 +265,13 @@ class UnitSystem:
             descending = True
         if ordering not in ['code', 'name', 'dimension']:
             ordering = 'name'
-        return sorted([Dimension(unit_system=self, code=dim)
-                       for dim in DIMENSIONS.keys()],
+        if search_term:
+            dims = [Dimension(unit_system=self, code=dim)
+                       for dim in DIMENSIONS.keys() if search_term in dim]
+        else:
+            dims = [Dimension(unit_system=self, code=dim)
+                    for dim in DIMENSIONS.keys()]
+        return sorted(dims,
                       key=lambda x: getattr(x, ordering, ''),
                       reverse=descending)
 
@@ -452,7 +464,8 @@ class Dimension:
         :param user: User owning the units
         :param key: optional unit key
         """
-        if user and user.is_authenticated:
+        if user and type(user) == User and \
+                getattr(user, 'is_authenticated', None):
             if user.is_superuser:
                 custom_units = CustomUnit.objects.all()
             else:
@@ -873,3 +886,15 @@ class CustomUnit(models.Model):
         except pint.errors.UndefinedUnitError:
             raise UnitDimensionError
         return super(CustomUnit, self).save(*args, **kwargs)
+
+
+def unit_system_obj(self, *args, **kwargs):
+    """
+    Returns a UnitSystem object from a system name
+    Doesn't take context into account
+    """
+    return UnitSystem(system_name=self.unit_system)
+
+
+# Add unit_system_obj attribute to Country class
+setattr(Country, 'unit_system_obj', unit_system_obj)

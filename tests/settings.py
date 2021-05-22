@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     'djangophysics.rates',
     'djangophysics.units',
     'djangophysics.calculations',
+    'djangophysics.graphql'
 ]
 
 MIDDLEWARE = [

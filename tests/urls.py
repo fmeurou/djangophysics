@@ -24,6 +24,7 @@ from rest_framework import permissions
 
 import djangophysics
 from djangophysics import urls as physics_urls
+from djangophysics.graphql import urls as graphql_urls
 
 environment = os.environ.get('PHYSICS_ENV', 'dev')
 contact_email = os.environ.get('PHYSICS_CONTACT', 'fm@peabytes.me')
@@ -54,5 +55,6 @@ urlpatterns = [
     url(r'^redoc/$', schema_view.with_ui('redoc', cache_timeout=0),
         name='schema-redoc'),
     path('', include('django.contrib.auth.urls')),
+    path('graphql', include(graphql_urls)),
     path('', include(physics_urls))
 ]

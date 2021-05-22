@@ -5,13 +5,16 @@ import logging
 from datetime import date
 from typing import Iterator
 
+from countryinfo import CountryInfo
 from django.contrib.auth.models import User
-from django.core.cache import cache
+from django.core.cache import caches
 from django.db import models
-from djangophysics.countries.models import Country
+
 from iso4217 import Currency as Iso4217
 
+from djangophysics.countries.models import Country
 from . import CURRENCY_SYMBOLS, DEFAULT_SYMBOL
+from .data import CURRENCY_COUNTRIES
 
 
 class CurrencyNotFoundError(Exception):
@@ -44,7 +47,7 @@ class Currency:
         Initialize an iso4217.Currency instance
         """
         try:
-            i = Iso4217(code)
+            i = Iso4217(code.upper())
             for a in ['code', 'name', 'currency_name',
                       'exponent', 'number', 'value']:
                 setattr(self, a, getattr(i, a))
@@ -103,21 +106,9 @@ class Currency:
         List countries using this currency
         :return: List of Country objects
         """
-        countries = []
-        cached_countries = cache.get(self.code + 'COUNTRIES')
-        if cached_countries:
-            return [Country(alpha_2) for alpha_2 in cached_countries]
-        for country in Country.all_countries():
-            try:
-                if self.code in country.currencies():
-                    countries.append(country)
-            except KeyError:
-                # Some countries listed in pycountry
-                # are not present in countryinfo
-                pass
-        cache.set(self.code + 'COUNTRIES',
-                  [country.alpha_2 for country in countries])
-        return countries
+        print("currency countries")
+        a2s = CURRENCY_COUNTRIES.get(self.code, [])
+        return [Country(alpha_2) for alpha_2 in a2s]
 
     @classmethod
     def get_for_country(cls, alpha2: str) -> Iterator[Currency]:
@@ -145,6 +136,7 @@ class Currency:
         :params end_date: rates to that date included
         :return: List of rates
         """
+        print("Currency get rates")
         from djangophysics.rates.models import Rate
         qs = Rate.objects.filter(currency=self.code)
         if user:

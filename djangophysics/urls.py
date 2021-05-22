@@ -1,4 +1,4 @@
-"""GeoCurrencies URL Configuration
+"""djangophysics URL Configuration
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/3.0/topics/http/urls/
@@ -15,12 +15,13 @@ Including another URLconf
 """
 from django.conf.urls import url, include
 from django.urls import path
+
+from .calculations import urls as calculations_url
 from .converters.views import WatchView
 from .countries import urls as country_urls
 from .currencies import urls as currency_urls
 from .rates import urls as rate_urls
 from .units import urls as unit_urls
-from .calculations import urls as calculations_url
 
 urlpatterns = [
     path('currencies/', include(currency_urls)),
