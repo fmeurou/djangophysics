@@ -7,10 +7,10 @@ import gettext
 import pycountry
 from drf_yasg.utils import swagger_serializer_method
 from djangophysics.core.helpers import validate_language
-from pycountry import countries
+from pycountry import countries, subdivisions
 from rest_framework import serializers
 
-from .models import Country
+from .models import Country, CountrySubdivision
 
 
 currency_serializer_module = importlib.import_module(
@@ -18,12 +18,13 @@ currency_serializer_module = importlib.import_module(
 currency_serializer_class = getattr(currency_serializer_module,
                                     'CurrencySerializer')
 
+
 class CountrySerializer(serializers.Serializer):
     """
     Serializer for Country
     """
     name = serializers.CharField(
-        label="ISO-3306 Country name",
+        label="ISO 3166 Country name",
         read_only=True)
     numeric = serializers.IntegerField(
         label="ISO numeric value",
@@ -180,6 +181,79 @@ class CountryDetailSerializer(serializers.Serializer):
                                     request.LANGUAGE_CODE))
                 translation = gettext.translation(
                     'iso3166', pycountry.LOCALES_DIR,
+                    languages=[language])
+                translation.install()
+                return translation.gettext(obj.name)
+            except FileNotFoundError:
+                return obj.name
+        else:
+            return obj.name
+
+
+class CountrySubdivisionSerializer(serializers.Serializer):
+    """
+    Serializer for Country
+    """
+    name = serializers.CharField(
+        label="ISO-3166-2 Country subdivision name",
+        read_only=True)
+    code = serializers.CharField(
+        label="ISO 3166-2 code value",
+        read_only=True)
+    type = serializers.CharField(
+        label="subdivision type")
+    country_code = serializers.CharField(
+        label="ISO 3166-1 country code",
+        read_only=True)
+    translated_name = serializers.SerializerMethodField(
+        label="Translated country subdivision name")
+
+    @staticmethod
+    def validate_code(code):
+        """
+        Validate that alpha 2 code is valid
+        :param alpha_2: alpha 2 code from ISO3166
+        """
+        if subdivisions.get(code=code):
+            return code
+        else:
+            raise serializers.ValidationError(
+                'Invalid country subdivision code')
+
+    def create(self, validated_data) -> CountrySubdivision:
+        """
+        Create a Country subdivision object
+        :param validated_data: cleaned data
+        """
+        return CountrySubdivision(
+            code=validated_data.get('code')
+        )
+
+    def update(self, instance, validated_data) -> CountrySubdivision:
+        """
+        Update a Country object
+        :param instance: Country subdivision object
+        :param validated_data: cleaned data
+        """
+        sd = CountrySubdivision(code=validated_data.get('code'))
+        self.instance = sd
+        return self.instance
+
+    @swagger_serializer_method(serializer_or_field=serializers.CharField)
+    def get_translated_name(self, obj: Country) -> str:
+        """
+        Translate country subdivision name
+        :param obj: CountrySubdivision
+        :return: translated name
+        """
+        request = self.context.get('request', None)
+        if request:
+            try:
+                language = validate_language(
+                    request.GET.get('language',
+                                    request.LANGUAGE_CODE))
+                translation = gettext.translation(
+                    'iso3166-2', pycountry.LOCALES_DIR,
                     languages=[language])
                 translation.install()
                 return translation.gettext(obj.name)

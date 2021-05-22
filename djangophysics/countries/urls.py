@@ -7,13 +7,15 @@ from django.urls import path
 from rest_framework import routers
 
 from .views import FlagView
-from .viewsets import CountryViewset
+from .viewsets import CountryViewset, CountrySubdivisionViewset
 
 
 app_name = 'countries'
 
 router = routers.DefaultRouter()
 router.register(r'', CountryViewset, basename='countries')
+router.register(r'(?P<alpha_2>\w+)/subdivisions',
+                CountrySubdivisionViewset, basename='subdivisions')
 
 urlpatterns = [
 

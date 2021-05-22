@@ -7,13 +7,14 @@ import os
 import re
 from datetime import datetime
 
+import pycountry
 import pytz
 import requests
 from countryinfo import CountryInfo
 from django.conf import settings
 from django.core.cache import caches, cache
 from django.db import models
-from pycountry import countries
+from pycountry import countries, subdivisions
 from pytz import timezone
 
 from .helpers import ColorProximity, hextorgb
@@ -115,6 +116,12 @@ class Country:
         Returns a basic representation of a country with name and iso codes
         """
         return countries.get(alpha_2=self.alpha_2)._fields
+
+    def subdivisions(self):
+        """
+        List ISO 3166-2 subdivisions of a country
+        """
+        return countries.get(alpha_2=self.alpha_2)
 
     def currencies(self, *args, **kwargs) -> []:
         """
@@ -280,3 +287,72 @@ class Country:
             return int(self.info.get('population', ''))
         except ValueError:
             return 0
+
+
+class CountrySubdivisionNotFound(Exception):
+    """
+    Exception when the subdivision cannot be found
+    """
+    pass
+
+
+class CountrySubdivision:
+    code = None
+    name = None
+    type = None
+    country_code = None
+    parent_code = None
+
+    def __init__(self, code):
+        print(code)
+        try:
+            sd = subdivisions.get(code=code)
+        except LookupError as e:
+            raise CountrySubdivisionNotFound(str(e)) from e
+        if not sd:
+            raise CountrySubdivisionNotFound(
+                f"Subdivision {code} does not exist"
+            )
+        self.code = code
+        self.name = sd.name
+        self.type = sd.type
+        self.country_code = sd.country_code
+        self.parent_code = sd.parent_code
+
+    @classmethod
+    def list_for_country(cls, country_code, ordering='name'):
+        if ordering not in ['code', 'name', 'type']:
+            ordering = 'name'
+        return sorted([CountrySubdivision(code=r.code)
+                for r in subdivisions.get(country_code=country_code)],
+               key=lambda x: getattr(x, ordering))
+
+
+    @classmethod
+    def search(cls, term):
+        result = []
+        for attr in ['code', 'name', 'type']:
+            result.extend(
+                [getattr(sd, 'code') for sd in subdivisions
+                 if term.lower() in getattr(sd, attr).lower()]
+            )
+        return sorted([CountrySubdivision(code=r) for r in set(result)], key=lambda x: x.name)
+
+    @property
+    def country(self):
+        """
+        Return the Country object corresponding to the country code
+        """
+        return Country(alpha_2=self.country_code)
+
+    @property
+    def parent(self):
+        """
+        Return the CountrySubdivision object corresponding to the parent_code
+        """
+        if self.parent_code:
+            return CountrySubdivision(code=self.parent_code)
+        return None
+
+
+
