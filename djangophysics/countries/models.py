@@ -344,6 +344,7 @@ class CountrySubdivision:
         if ordering not in ['code', 'name', 'type']:
             ordering = 'name'
         result = []
+        search_term = search_term or ''
         for attr in ['code', 'name', 'type']:
             if country_code:
                 result.extend(
@@ -394,3 +395,34 @@ class CountrySubdivision:
                  for sd in self.list_for_country(country_code=self.country_code)
                  if sd.parent_code == self.code],
                 key=lambda x: getattr(x, ordering))
+
+
+class Address:
+    """
+    Geocoder address
+    location: GPS coordinates [lat, lng]
+    street number
+    street: Name of the street
+    postal_code
+    city: Name of the city
+    subdivision: ISO 3166-2 code
+    country: ISO 3166-1 alpha2
+    confidence: Int representing confidence in geolocation
+    """
+    location = None  # type: [float, float]
+    street_number = None  # type: str
+    street = None  # type: str
+    postal_code = None  # type: str
+    locality = None  # type: str
+    county = None
+    subdivision = None  # type: str
+    subdivision_label = None  # type: str
+    country = None  # type: str
+    confidence = 0
+
+    def save(self):
+        cache.set(self.location, self)
+
+    @classmethod
+    def load(cls, location):
+        return cache.get(location)

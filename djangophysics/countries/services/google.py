@@ -1,13 +1,13 @@
 """
 Google Geocoder service
 """
-import json
 import logging
 
 import requests
 from django.conf import settings
 
 from . import Geocoder
+from ..models import Address
 
 GEOCODER_GOOGLE_URL = 'https://maps.googleapis.com/maps/api'
 
@@ -48,59 +48,40 @@ class GoogleGeocoder(Geocoder):
         Google geocoding search
         Retrieves coordinates based on address
         """
-        try:
-            response = requests.get('{}/{}'.format(
-                GEOCODER_GOOGLE_URL,
-                'geocode/json'
-            ), {
-                'address': address,
-                'key': self.key,
-                'language': language
-            })
-            data = response.json()
-            if data.get('status') != "OK":
-                return {}
-            return data
-        except json.JSONDecodeError as e:
-            logging.error("Invalid response")
-            logging.error(e)
-        except ValueError as e:
-            logging.error("Invalid API configuration")
-            logging.error(e)
-        except IOError as e:
-            logging.error("Invalid request")
-            logging.error(e)
-        return {}
+        response = requests.get('{}/{}'.format(
+            GEOCODER_GOOGLE_URL,
+            'geocode/json'
+        ), {
+            'address': address,
+            'key': self.key,
+            'language': language
+        })
+        data = response.json()
+        if data.get('status') != "OK":
+            print("error", data)
+        return data
 
-    def reverse(self, lat: str, lng: str) -> dict:
+    def reverse(self, lat: str, lng: str, language: str = None) -> dict:
         """
         Google geocoding reverse
         :param lat: latitude
         :param lng: longitude
+        :param language: The language in which to return results. 
         """
-        try:
-            response = requests.get('{}/{}'.format(
-                GEOCODER_GOOGLE_URL,
-                'geocode/json'
-            ),
-                {
-                    'latlng': ",".join(map(str, [lat, lng])),
-                    'key': self.key,
-                })
-            data = response.json()
-            if data.get('status') != "OK":
-                return {}
-            return data
-        except json.JSONDecodeError as e:
-            logging.error("Invalid response")
-            logging.error(e)
-        except ValueError as e:
-            logging.error("Invalid API configuration")
-            logging.error(e)
-        except IOError as e:
-            logging.error("Invalid request")
-            logging.error(e)
-        return {}
+        request_data = {
+            'latlng': ",".join(map(str, [lat, lng])),
+            'key': self.key,
+        }
+        print(request_data)
+        response = requests.get('{}/{}'.format(
+            GEOCODER_GOOGLE_URL,
+            'geocode/json'
+            ), request_data
+        )
+        data = response.json()
+        if data.get('status') != "OK":
+            print("error", data)
+        return data
 
     def parse_countries(self, data: dict) -> [str]:
         """
@@ -116,3 +97,38 @@ class GoogleGeocoder(Geocoder):
                 if 'country' in address_component.get('types'):
                     alphas.append(address_component.get('short_name'))
         return alphas
+
+    def parse_addresses(self, data: dict) -> [Address]:
+        """
+        Parse address from Pelias response
+        """
+        addresses = []
+        for feature in data.get('results'):
+            print("--feature", feature)
+            try:
+                address = Address()
+                address.location = feature['geometry']['location']
+                for component in feature['address_components']:
+                    print("component", component)
+                    if 'street_number' in component['types']:
+                        address.street_number = component['long_name']
+                    if 'route' in component['types']:
+                        address.street = component['long_name']
+                    if 'locality' in component['types']:
+                        address.locality = component['long_name']
+                    if 'administrative_area_level_2' in component['types']:
+                        address.county = component['long_name']
+                    if 'administrative_area_level_1' in component['types']:
+                        address.subdivision = component['short_name']
+                        address.subdivision_label = component['long_name']
+                    if 'country' in component['types']:
+                        address.country = component['short_name']
+                    if 'postal_code' in component['types']:
+                        address.postal_code = component['long_name']
+                print(address)
+                addresses.append(address)
+            except KeyError as e:
+                print(e)
+                print(f'unparsable address {feature}')
+                logging.warning(f'unparsable address {feature}: {str(e)}')
+        return addresses

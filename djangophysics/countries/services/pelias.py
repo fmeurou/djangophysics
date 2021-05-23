@@ -9,6 +9,7 @@ from pycountry import countries
 
 from . import Geocoder
 from ..settings import GEOCODING_SERVICE_SETTINGS
+from ..models import Address
 
 
 class PeliasGeocoder(Geocoder):
@@ -47,7 +48,7 @@ class PeliasGeocoder(Geocoder):
         """
         Search address
         :param address: Address to look for
-        :param language: language of the query
+        :param language: The language in which to return results.
         :param bounds: Unused at the moment
         :param region: not used
         :param components: not used
@@ -71,11 +72,12 @@ class PeliasGeocoder(Geocoder):
             logging.error(e)
         return {}
 
-    def reverse(self, lat: str, lng: str) -> dict:
+    def reverse(self, lat: str, lng: str, language: str = None) -> dict:
         """
         Reverse search by coordinates
         :param lat: latitude
         :param lng: longitude
+        :param language: The language in which to return results.
         """
         search_args = {
             'point.lat': lat,
@@ -112,3 +114,27 @@ class PeliasGeocoder(Geocoder):
                 alpha_3=feature.get('properties'
                                     ).get('country_a')).alpha_2)
         return alphas
+
+    def parse_addresses(self, data: dict) -> [Address]:
+        """
+        Parse address from Pelias response
+        """
+        addresses = []
+        for feature in data.get('features'):
+            address = Address()
+            try:
+                address.location = feature['geometry']['coordinates']
+                address.street_number = feature['properties']['housenumber']
+                address.street = feature['properties']['street']
+                address.postal_code = feature['properties']['postalcode']
+                address.locality = feature['properties']['locality']
+                address.county = feature['properties'].get('county', None)
+                address.subdivision = feature['properties'].get('region_a', None)
+                address.country = feature['properties']['country_a']
+                addresses.append(address)
+            except KeyError as e:
+                logging.warning(f'upparsable address {feature}')
+        return
+
+
+

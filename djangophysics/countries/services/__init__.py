@@ -31,7 +31,7 @@ class Geocoder:
         """
         raise NotImplementedError("Use specific implementation")
 
-    def reverse(self, lat, lng):
+    def reverse(self, lat, lng, language: str = None):
         """
         Search from GPS coordinates
         :params lat: latitude
@@ -39,7 +39,7 @@ class Geocoder:
         """
         raise NotImplementedError("Use specific implementation")
 
-    def parse_countries(self, data):
+    def parse_countries(self, data: dict):
         """
         Parse countries from result
         :params data: geocoding / reverse geocoding result
@@ -47,7 +47,7 @@ class Geocoder:
         """
         raise NotImplementedError("Use specific implementation")
 
-    def countries(self, data):
+    def countries(self, data: dict):
         """
         List countries
         :params data: json response from geocoding / reverse geocoding service
@@ -66,3 +66,18 @@ class Geocoder:
                 continue
             countries.append(country)
         return sorted(countries, key=lambda x: x.name)
+
+    def parse_addresses(self, data: dict):
+        """
+        Return address
+        """
+        raise NotImplementedError("Use specific implementation")
+
+    def addresses(self, data: dict):
+        """
+        List addresses
+        :param data: json response from geocoding / reverse geocoding service
+        """
+        return self.parse_addresses(data=data)
+
+

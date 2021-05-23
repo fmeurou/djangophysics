@@ -1,17 +1,16 @@
 """
 Serializers for country classes
 """
-import importlib
 import gettext
+import importlib
 
 import pycountry
 from drf_yasg.utils import swagger_serializer_method
-from djangophysics.core.helpers import validate_language
 from pycountry import countries, subdivisions
 from rest_framework import serializers
 
+from djangophysics.core.helpers import validate_language
 from .models import Country, CountrySubdivision
-
 
 currency_serializer_module = importlib.import_module(
     'djangophysics.currencies.serializers')
@@ -118,7 +117,7 @@ class CountryDetailSerializer(serializers.Serializer):
     translated_name = serializers.SerializerMethodField(
         label="Country translated name")
     currencies = currency_serializer_class(many=True,
-        label="Currencies for this country")
+                                           label="Currencies for this country")
 
     @swagger_serializer_method(
         serializer_or_field=
@@ -261,3 +260,89 @@ class CountrySubdivisionSerializer(serializers.Serializer):
                 return obj.name
         else:
             return obj.name
+
+
+class LocationSerializer(serializers.Serializer):
+    """
+    Serializen for GPS coordinates
+    """
+    lat = serializers.FloatField(
+        label="latitude"
+    )
+    lng = serializers.FloatField(
+        label="longitude"
+    )
+
+
+class AddressSerializer(serializers.Serializer):
+    """
+    Serializer for Address
+    """
+    location = LocationSerializer()
+    street_number = serializers.CharField(
+        label="Street number"
+    )
+    street = serializers.CharField(
+        label="Street name"
+    )
+    postal_code = serializers.CharField(
+        label="Postal code"
+    )
+    locality = serializers.CharField(
+        label="Locality or city name"
+    )
+    county = serializers.SerializerMethodField(
+        label="County name or object",
+        required=False
+    )
+    subdivision = serializers.SerializerMethodField(
+        label="CountrySubdivision object"
+    )
+    subdivision_label = serializers.CharField(
+        label="CountrySubdivision label"
+    )
+    country = serializers.SerializerMethodField(
+        label="Country object"
+    )
+    confidence = serializers.IntegerField()
+
+    @classmethod
+    def validate_country(value):
+        """
+        Validate country alpha_2 code
+        """
+        if not countries.get(alpha_2=value):
+            raise serializers.ValidationError("Invalid country code")
+        return value
+
+    def get_country(self, obj):
+        """
+        Get Country from country alpha_2
+        """
+        return CountrySerializer(
+            Country(alpha_2=obj.country)
+        ).data
+
+    def get_subdivision(self, obj):
+        """
+        Get subdivision from subdivision code
+        """
+        if obj.subdivision:
+            sd = CountrySubdivision(code=f"{obj.country}-{obj.subdivision}")
+            if sd:
+                return CountrySubdivisionSerializer(sd).data
+        else:
+            return obj.subdivision_label
+
+    def get_county(self, obj):
+        """
+        Get county from county name
+        """
+        if obj.county:
+            sd = CountrySubdivision.search(
+                search_term=obj.county,
+                country_code=obj.country)
+            if sd:
+                return CountrySubdivisionSerializer(sd[0]).data
+        else:
+            return obj.county
