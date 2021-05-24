@@ -1,15 +1,15 @@
 """
 Pelias geocoder
 """
+import json
 import logging
 
-import requests
 from django.conf import settings
 from pycountry import countries
 
-from . import Geocoder
-from ..settings import GEOCODING_SERVICE_SETTINGS
+from . import Geocoder, GeocoderRequestError
 from ..models import Address
+from ..settings import GEOCODING_SERVICE_SETTINGS
 
 
 class PeliasGeocoder(Geocoder):
@@ -42,6 +42,38 @@ class PeliasGeocoder(Geocoder):
             pelias_url = GEOCODING_SERVICE_SETTINGS['pelias']['default_url']
         self.server_url = server_url or pelias_url
 
+    def _parse_response(self, response) -> dict:
+        """
+        Handle response errors
+        """
+        if response.status_code == 200:
+            try:
+                return response.json()
+            except json.JSONDecodeError as e:
+                raise GeocoderRequestError(
+                    f"Invalid json response from geocoder: {e}") from e
+        elif response.status_code == 400:
+            raise GeocoderRequestError(
+                f"Invalid geocoder request parameters: {response.content}"
+            )
+        elif response.status_code == 401:
+            raise GeocoderRequestError(
+                f"Invalid geocoder credentials: {response.content}"
+            )
+        elif response.status_code == 404:
+            raise GeocoderRequestError(
+                f"Invalid geocoder request url: {response.content}"
+            )
+        elif response.status_code == 429:
+            raise GeocoderRequestError(
+                f"Too many requests to geocoder: {response.content}"
+            )
+        elif response.status_code == 500:
+            raise GeocoderRequestError(
+                f"Geocoder server error: {response.content}"
+            )
+        return {}
+
     def search(self, address: str, language: str = None,
                bounds: str = None, region: str = None,
                components: str = "") -> dict:
@@ -56,21 +88,7 @@ class PeliasGeocoder(Geocoder):
         search_args = {'text': address}
         if self.key:
             search_args['api_key'] = self.key
-        try:
-            response = requests.get(f'{self.server_url}/search', search_args)
-            data = response.json()
-            if 'errors' in data:
-                logging.error("Invalid request")
-                logging.error(data.get('error'))
-                return {}
-            return data
-        except ValueError as e:
-            logging.error("Invalid API configuration")
-            logging.error(e)
-        except IOError as e:
-            logging.error("Invalid request")
-            logging.error(e)
-        return {}
+        return self._query_server(f'{self.server_url}/search', search_args)
 
     def reverse(self, lat: str, lng: str, language: str = None) -> dict:
         """
@@ -85,20 +103,7 @@ class PeliasGeocoder(Geocoder):
         }
         if self.key:
             search_args['api_key'] = self.key
-        try:
-            response = requests.get(f'{self.server_url}/reverse', search_args)
-            data = response.json()
-            if 'errors' in data:
-                logging.error("ERROR - Invalid request")
-                logging.error(data.get('error'))
-                return {}
-            return data
-        except ValueError as e:
-            logging.error("Invalid API configuration")
-            logging.error(e)
-        except IOError as e:
-            logging.error("Invalid request", e)
-        return {}
+        return self._query_server(f'{self.server_url}/reverse', search_args)
 
     def parse_countries(self, data: dict) -> [str]:
         """
@@ -123,18 +128,19 @@ class PeliasGeocoder(Geocoder):
         for feature in data.get('features'):
             address = Address()
             try:
-                address.location = feature['geometry']['coordinates']
+                address.location = {
+                    'lat': feature['geometry']['coordinates'][0],
+                    'lng': feature['geometry']['coordinates'][1],
+                }
                 address.street_number = feature['properties']['housenumber']
                 address.street = feature['properties']['street']
                 address.postal_code = feature['properties']['postalcode']
                 address.locality = feature['properties']['locality']
                 address.county = feature['properties'].get('county', None)
-                address.subdivision = feature['properties'].get('region_a', None)
-                address.country = feature['properties']['country_a']
+                address.subdivision = feature['properties'].get('region_a',
+                                                                None)
+                address.country = feature['properties']['country_a'][:2]
                 addresses.append(address)
             except KeyError as e:
                 logging.warning(f'upparsable address {feature}')
-        return
-
-
-
+        return addresses

@@ -1,6 +1,7 @@
 """
 Country services
 """
+import requests
 from timezonefinder import TimezoneFinder
 
 from djangophysics.countries.models import Country, CountryNotFoundError
@@ -8,10 +9,29 @@ from djangophysics.countries.models import Country, CountryNotFoundError
 tf = TimezoneFinder(in_memory=True)
 
 
+class GeocoderRequestError(Exception):
+    """
+    Exception to handle returns from servers
+    """
+
+
 class Geocoder:
     """
     Geocoder services
     """
+
+    def _query_server(self, url: str, search_args: dict):
+        """
+        Internal function to query geocoding server
+        """
+        response = requests.get(url, search_args)
+        return self._parse_response(response=response)
+
+    def _parse_response(self, response) -> dict:
+        """
+        Handle response errors
+        """
+        raise NotImplementedError("Use specific implementation")
 
     def search(self,
                address,
@@ -79,5 +99,3 @@ class Geocoder:
         :param data: json response from geocoding / reverse geocoding service
         """
         return self.parse_addresses(data=data)
-
-

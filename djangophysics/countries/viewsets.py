@@ -3,6 +3,7 @@ Country API viewsets
 """
 import json
 import logging
+
 from countryinfo import CountryInfo
 from django.conf import settings
 from django.utils.decorators import method_decorator
@@ -223,6 +224,13 @@ class CountryViewset(ViewSet):
         """
         Find country by geocoding (giving address or POI)
         """
+        if 'geocoding' not in getattr(settings, 'SERVICES'):
+            return Response("Geocoding service not configured",
+                            status=status.HTTP_412_PRECONDITION_FAILED)
+        if not request.GET.get('geocoder', 'google') in \
+               settings.SERVICES['geocoding']:
+            return Response("Geocoder not found",
+                            status=status.HTTP_404_NOT_FOUND)
         language = validate_language(
             request.GET.get('language',
                             request.LANGUAGE_CODE))
@@ -270,6 +278,13 @@ class CountryViewset(ViewSet):
         """
         Find country by reverse geocoding (giving latitude and longitude)
         """
+        if 'geocoding' not in getattr(settings, 'SERVICES'):
+            return Response("Geocoding service not configured",
+                            status=status.HTTP_412_PRECONDITION_FAILED)
+        if not request.GET.get('geocoder', 'google') in \
+               settings.SERVICES['geocoding']:
+            return Response("Geocoder not found",
+                            status=status.HTTP_404_NOT_FOUND)
         language = validate_language(
             request.GET.get('language',
                             request.LANGUAGE_CODE))
@@ -298,7 +313,6 @@ class CountryViewset(ViewSet):
             logging.error("Invalid request")
             logging.error(e)
             return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
-        print(data)
         addresses = geocoder.addresses(data)
         serializer = AddressSerializer(
             addresses, many=True, context={'request': request})
@@ -337,7 +351,7 @@ class CountrySubdivisionViewset(ViewSet):
     @method_decorator(cache_page(60 * 60 * 24))
     @method_decorator(vary_on_cookie)
     @swagger_auto_schema(
-        manual_parameters=[language, language_header, search,  ordering],
+        manual_parameters=[language, language_header, search, ordering],
         responses={200: country_subdivision_response})
     def list(self, request, alpha_2):
         """
@@ -363,7 +377,7 @@ class CountrySubdivisionViewset(ViewSet):
                     )
                 except CountrySubdivisionNotFound:
                     return Response("Invalid country code",
-                            status=status.HTTP_404_NOT_FOUND)
+                                    status=status.HTTP_404_NOT_FOUND)
             serializer = CountrySubdivisionSerializer(
                 sd,
                 many=True,
