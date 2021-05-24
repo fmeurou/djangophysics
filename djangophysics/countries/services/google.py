@@ -4,10 +4,10 @@ Google Geocoder service
 import json
 import logging
 
-import requests
 from django.conf import settings
 
-from . import Geocoder
+from . import Geocoder, GeocoderRequestError
+from ..models import Address
 
 GEOCODER_GOOGLE_URL = 'https://maps.googleapis.com/maps/api'
 
@@ -26,81 +26,98 @@ class GoogleGeocoder(Geocoder):
         """
         return super(Geocoder, cls).__new__(cls)
 
-    def __init__(self, key: str = None, *args, **kwargs):
+    def _parse_response(self, response) -> dict:
         """
-        Google geocode engine
-        Init: Geocoder('google', 'API key')
+        Handle response errors
         """
-        try:
-            if not key and not settings.GEOCODER_GOOGLE_KEY:
-                raise ValueError(
-                    "This geocoder needs an API key, please provide a key"
-                    " or set GEOCODER_GOOGLE_KEY in configuration")
-        except AttributeError:
-            raise ValueError(
-                "This geocoder needs an API key, please provide a key "
-                "or set GEOCODER_GOOGLE_KEY in configuration")
-        self.key = key or settings.GEOCODER_GOOGLE_KEY
+        if response.status_code == 200:
+            try:
+                json_response = response.json()
+                if json_response['status'] in ('OK', 'ZERO_RESULTS'):
+                    return json_response
+                elif json_response['status'] in (
+                        'OVER_DAILY_LIMIT',
+                        'OVER_QUERY_LIMIT'):
+                    raise GeocoderRequestError(
+                        f"Too many requests to geocoder: "
+                        f"{json_response['status']}"
+                    )
+                elif json_response['status'] == 'REQUEST_DENIED':
+                    raise GeocoderRequestError(
+                        f"Invalid geocoder credentials: {response.content}"
+                    )
+                elif json_response['status'] == 'INVALID_REQUEST':
+                    raise GeocoderRequestError(
+                        f"Invalid geocoder request parameters: "
+                        f"{response.content}"
+                    )
+                elif json_response['status'] == 'UNKNOWN_ERROR':
+                    raise GeocoderRequestError(
+                        f"Geocoder server error: {response.content}"
+                    )
+            except json.JSONDecodeError as e:
+                raise GeocoderRequestError(
+                    f"Invalid json response from geocoder: {e}") from e
+        elif response.status_code == 400:
+            raise GeocoderRequestError(
+                f"Invalid geocoder request parameters: {response.content}"
+            )
+        elif response.status_code == 401:
+            raise GeocoderRequestError(
+                f"Invalid geocoder credentials: {response.content}"
+            )
+        elif response.status_code == 404:
+            raise GeocoderRequestError(
+                f"Invalid geocoder request url: {response.content}"
+            )
+        elif response.status_code == 429:
+            raise GeocoderRequestError(
+                f"Too many requests to geocoder: {response.content}"
+            )
+        elif response.status_code == 500:
+            raise GeocoderRequestError(
+                f"Geocoder server error: {response.content}"
+            )
+        return {}
 
-    def search(self, address: str, language: str = None, bounds=None,
-               region: str = None, components: str = "") -> dict:
+    def search(self,
+               address: str,
+               key: str,
+               language: str = None,
+               bounds: str = None,
+               region: str = None,
+               components: str = "") -> dict:
         """
         Google geocoding search
         Retrieves coordinates based on address
         """
-        try:
-            response = requests.get('{}/{}'.format(
-                GEOCODER_GOOGLE_URL,
-                'geocode/json'
-            ), {
-                'address': address,
-                'key': self.key,
-                'language': language
-            })
-            data = response.json()
-            if data.get('status') != "OK":
-                return {}
-            return data
-        except json.JSONDecodeError as e:
-            logging.error("Invalid response")
-            logging.error(e)
-        except ValueError as e:
-            logging.error("Invalid API configuration")
-            logging.error(e)
-        except IOError as e:
-            logging.error("Invalid request")
-            logging.error(e)
-        return {}
+        search_args = {
+            'address': address,
+            'key': key,
+            'language': language
+        }
+        return self._query_server(
+            f'{GEOCODER_GOOGLE_URL}/geocode/json',
+            search_args)
 
-    def reverse(self, lat: str, lng: str) -> dict:
+    def reverse(self,
+                lat: str,
+                lng: str,
+                key: str,
+                language: str = None) -> dict:
         """
         Google geocoding reverse
         :param lat: latitude
         :param lng: longitude
+        :param language: The language in which to return results. 
         """
-        try:
-            response = requests.get('{}/{}'.format(
-                GEOCODER_GOOGLE_URL,
-                'geocode/json'
-            ),
-                {
-                    'latlng': ",".join(map(str, [lat, lng])),
-                    'key': self.key,
-                })
-            data = response.json()
-            if data.get('status') != "OK":
-                return {}
-            return data
-        except json.JSONDecodeError as e:
-            logging.error("Invalid response")
-            logging.error(e)
-        except ValueError as e:
-            logging.error("Invalid API configuration")
-            logging.error(e)
-        except IOError as e:
-            logging.error("Invalid request")
-            logging.error(e)
-        return {}
+        search_args = {
+            'latlng': ",".join(map(str, [lat, lng])),
+            'key': key,
+        }
+        return self._query_server(
+            f'{GEOCODER_GOOGLE_URL}/geocode/json',
+            search_args)
 
     def parse_countries(self, data: dict) -> [str]:
         """
@@ -116,3 +133,33 @@ class GoogleGeocoder(Geocoder):
                 if 'country' in address_component.get('types'):
                     alphas.append(address_component.get('short_name'))
         return alphas
+
+    def parse_addresses(self, data: dict) -> [Address]:
+        """
+        Parse address from Pelias response
+        """
+        addresses = []
+        for feature in data.get('results'):
+            try:
+                address = Address()
+                address.location = feature['geometry']['location']
+                for component in feature['address_components']:
+                    if 'street_number' in component['types']:
+                        address.street_number = component['long_name']
+                    if 'route' in component['types']:
+                        address.street = component['long_name']
+                    if 'locality' in component['types']:
+                        address.locality = component['long_name']
+                    if 'administrative_area_level_2' in component['types']:
+                        address.county_label = component['long_name']
+                    if 'administrative_area_level_1' in component['types']:
+                        address.subdivision_code = component['short_name']
+                        address.subdivision_label = component['long_name']
+                    if 'country' in component['types']:
+                        address.country_alpha_2 = component['short_name']
+                    if 'postal_code' in component['types']:
+                        address.postal_code = component['long_name']
+                addresses.append(address)
+            except KeyError as e:
+                logging.warning(f'unparsable address {feature}: {str(e)}')
+        return addresses

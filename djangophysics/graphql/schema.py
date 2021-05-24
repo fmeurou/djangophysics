@@ -3,6 +3,7 @@ Djangophysics GraphQL schemas
 """
 from ariadne import QueryType, gql, make_executable_schema
 
+from ..core.helpers import validate_language, service
 from ..countries.models import Country, CountrySubdivision
 from ..currencies.models import Currency
 from ..rates.models import Rate
@@ -58,6 +59,44 @@ type_defs = '''
         numeric_offset: Int!,
         "Current time"
         current_time: String!
+    }
+    
+    """
+    GPS Location
+    """
+    type Location    {
+        "Latitude"
+        lat: Float!,
+        "Longitude"
+        lng: Float!
+    }
+    
+    """
+    Address  
+    """
+    type Address {
+        "GPS coordinates"
+        location: Location,
+        "Street number"
+        street_number: String,
+        "Street name"
+        street: String,
+        "Postal code"
+        postal_code: String,
+        "Locality or city name"
+        locality: String
+        "County or administrative level"
+        county: CountrySubdivision,
+        "County or administrative level name"
+        county_label: String,
+        "Subdivision name"
+        subdivision_label: String,
+        "Subdivision object"
+        subdivision: CountrySubdivision,
+        "Country object"
+        country: Country
+        "Result confidence, not always available"
+        confidence: Int,
     }
     
     """
@@ -197,6 +236,10 @@ type_defs = '''
         countries(term: String): [Country]
         "Country details"
         country(alpha_2: String!): Country
+        "Geocode interface: key is the API key to the geocoding service"
+        geocode(address: String!, key: String, language: String, geocoder: String): [Address]
+        "Reverse Geocode interface: key is the API key to the geocoding service"
+        reverse_geocode(atitude: Float!, longitude: Float!, key: String, language: String, geocoder: String): [Address]
         "Searchable list of subdivisions for a country"
         country_subdivisions_search(search_term: String!, country_code: String, ordering: String): [CountrySubdivision]
         "List of subdivisions for a country"
@@ -415,6 +458,39 @@ def resolve_dimensions(_, info, system_name):
 def resolve_dimension(_, info, system_name, unit_name):
     us = UnitSystem(system_name=system_name)
     return us.unit(unit_name=unit_name)
+
+
+@query.field("geocode")
+def resolve_geocode(_, info, address: str, key: str,
+                    language: str = 'en', geocoder: str = 'google'):
+    language = validate_language(lang=language)
+    geocoder = service(
+        service_type='geocoding',
+        service_name=geocoder
+    )
+    data = geocoder.search(
+        address=address,
+        key=key,
+        language=language
+    )
+    return geocoder.addresses(data)
+
+
+@query.field("reverse_geocode")
+def resolve_reverse_geocode(_, info, latitude: float, longitude: float, key: str,
+                    language: str = 'en', geocoder: str = 'google'):
+    language = validate_language(lang=language)
+    geocoder = service(
+        service_type='geocoding',
+        service_name=geocoder
+    )
+    data = geocoder.reverse(
+        lat=latitude,
+        lng=longitude,
+        key=key,
+        language=language
+    )
+    return geocoder.addresses(data)
 
 
 schema = make_executable_schema(type_defs, query)

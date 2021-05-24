@@ -3,12 +3,10 @@ Country URLs
 """
 
 from django.conf.urls import url, include
-from django.urls import path
 from rest_framework import routers
 
 from .views import FlagView
 from .viewsets import CountryViewset, CountrySubdivisionViewset
-
 
 app_name = 'countries'
 

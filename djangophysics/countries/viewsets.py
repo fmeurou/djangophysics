@@ -1,6 +1,8 @@
 """
 Country API viewsets
 """
+import json
+import logging
 
 from countryinfo import CountryInfo
 from django.conf import settings
@@ -10,17 +12,19 @@ from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_cookie
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from drf_yasg.views import deferred_never_cache
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.status import HTTP_404_NOT_FOUND
 from rest_framework.viewsets import ViewSet
 
-from djangophysics.core.helpers import service
+from djangophysics.core.helpers import service, validate_language
 from .models import Country, CountryNotFoundError, \
     CountrySubdivision, CountrySubdivisionNotFound
 from .serializers import CountrySerializer, CountryDetailSerializer, \
-    CountrySubdivisionSerializer
+    CountrySubdivisionSerializer, AddressSerializer
+from .services import GeocoderRequestError
 
 
 class CountryViewset(ViewSet):
@@ -214,31 +218,66 @@ class CountryViewset(ViewSet):
 
     @swagger_auto_schema(
         method='get',
-        manual_parameters=[address, geocoder, geocoder_api_key],
-        responses={200: CountrySerializer})
+        manual_parameters=[address, geocoder, geocoder_api_key,
+                           language_header, language],
+        responses={200: AddressSerializer})
     @action(['GET'], detail=False, url_path='geocode', url_name='geocoding')
     def geocode(self, request):
         """
         Find country by geocoding (giving address or POI)
         """
+        if 'geocoding' not in getattr(settings, 'SERVICES'):
+            return Response("Geocoding service not configured",
+                            status=status.HTTP_412_PRECONDITION_FAILED)
+        if not request.GET.get('geocoder', 'google') in \
+               settings.SERVICES['geocoding']:
+            return Response("Geocoder not found",
+                            status=status.HTTP_404_NOT_FOUND)
+        language = validate_language(
+            request.GET.get('language',
+                            request.LANGUAGE_CODE))
         geocoder = service(
             service_type='geocoding',
             service_name=request.GET.get('geocoder',
-                                         settings.GEOCODING_SERVICE),
-            key=request.GET.get('geocoder_api_key',
-                                settings.GEOCODER_GOOGLE_KEY))
-        data = geocoder.search(address=request.GET.get('address'))
-        countries = geocoder.countries(data)
-        serializer = CountrySerializer(
-            countries,
+                                         settings.GEOCODING_SERVICE)
+        )
+        try:
+            data = geocoder.search(
+                address=request.GET.get('address'),
+                key=request.GET.get('geocoder_api_key',
+                                    settings.GEOCODER_GOOGLE_KEY),
+                language=language
+            )
+        except TypeError as e:
+            logging.error("Invalid parameters")
+            logging.error(e)
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        except json.JSONDecodeError as e:
+            logging.error("Invalid response")
+            logging.error(e)
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as e:
+            logging.error("Invalid API configuration")
+            logging.error(e)
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        except IOError as e:
+            logging.error("Invalid request")
+            logging.error(e)
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        except GeocoderRequestError as e:
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        addresses = geocoder.addresses(data)
+        serializer = AddressSerializer(
+            addresses,
             many=True,
             context={'request': request})
         return Response(serializer.data)
 
     @swagger_auto_schema(
         method='get',
-        manual_parameters=[lat, lng, geocoder, geocoder_api_key],
-        responses={200: CountrySerializer})
+        manual_parameters=[lat, lng, geocoder, geocoder_api_key,
+                           language_header, language],
+        responses={200: AddressSerializer})
     @action(['GET'],
             detail=False,
             url_path='reverse',
@@ -247,19 +286,50 @@ class CountryViewset(ViewSet):
         """
         Find country by reverse geocoding (giving latitude and longitude)
         """
+        if 'geocoding' not in getattr(settings, 'SERVICES'):
+            return Response("Geocoding service not configured",
+                            status=status.HTTP_412_PRECONDITION_FAILED)
+        if not request.GET.get('geocoder', 'google') in \
+               settings.SERVICES['geocoding']:
+            return Response("Geocoder not found",
+                            status=status.HTTP_404_NOT_FOUND)
+        language = validate_language(
+            request.GET.get('language',
+                            request.LANGUAGE_CODE))
         geocoder = service(
             service_type='geocoding',
             service_name=request.GET.get('geocoder',
-                                         settings.GEOCODING_SERVICE),
-            key=request.GET.get('geocoder_api_key',
-                                settings.GEOCODER_GOOGLE_KEY))
-        data = geocoder.reverse(
-            lat=request.GET.get('lat'),
-            lng=request.GET.get('lon')
+                                         settings.GEOCODING_SERVICE)
         )
-        countries = geocoder.countries(data)
-        serializer = CountrySerializer(
-            countries, many=True, context={'request': request})
+        try:
+            data = geocoder.reverse(
+                lat=request.GET.get('latitude'),
+                lng=request.GET.get('longitude'),
+                key=request.GET.get('geocoder_api_key',
+                                    settings.GEOCODER_GOOGLE_KEY),
+                language=language
+            )
+        except TypeError as e:
+            logging.error("Invalid parameters")
+            logging.error(e)
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        except json.JSONDecodeError as e:
+            logging.error("Invalid response")
+            logging.error(e)
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as e:
+            logging.error("Invalid API configuration")
+            logging.error(e)
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        except IOError as e:
+            logging.error("Invalid request")
+            logging.error(e)
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        except GeocoderRequestError as e:
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        addresses = geocoder.addresses(data)
+        serializer = AddressSerializer(
+            addresses, many=True, context={'request': request})
         return Response(serializer.data)
 
 
@@ -295,7 +365,7 @@ class CountrySubdivisionViewset(ViewSet):
     @method_decorator(cache_page(60 * 60 * 24))
     @method_decorator(vary_on_cookie)
     @swagger_auto_schema(
-        manual_parameters=[language, language_header, search,  ordering],
+        manual_parameters=[language, language_header, search, ordering],
         responses={200: country_subdivision_response})
     def list(self, request, alpha_2):
         """
@@ -321,7 +391,7 @@ class CountrySubdivisionViewset(ViewSet):
                     )
                 except CountrySubdivisionNotFound:
                     return Response("Invalid country code",
-                            status=status.HTTP_404_NOT_FOUND)
+                                    status=status.HTTP_404_NOT_FOUND)
             serializer = CountrySubdivisionSerializer(
                 sd,
                 many=True,

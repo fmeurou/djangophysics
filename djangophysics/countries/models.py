@@ -344,6 +344,7 @@ class CountrySubdivision:
         if ordering not in ['code', 'name', 'type']:
             ordering = 'name'
         result = []
+        search_term = search_term or ''
         for attr in ['code', 'name', 'type']:
             if country_code:
                 result.extend(
@@ -394,3 +395,67 @@ class CountrySubdivision:
                  for sd in self.list_for_country(country_code=self.country_code)
                  if sd.parent_code == self.code],
                 key=lambda x: getattr(x, ordering))
+
+
+class Location:
+    """
+    GPS Location
+    """
+    latitude = None  # type: float
+    longitude = None # type: float
+
+
+class Address:
+    """
+    Geocoder address
+    location: GPS coordinates [lat, lng]
+    street number
+    street: Name of the street
+    postal_code
+    city: Name of the city
+    subdivision: ISO 3166-2 code
+    country: ISO 3166-1 alpha2
+    confidence: Int representing confidence in geolocation
+    """
+    location = None  # type: Location
+    street_number = None  # type: str
+    street = None  # type: str
+    postal_code = None  # type: str
+    locality = None  # type: str
+    county_label = None  # type: str
+    subdivision_label = None  # type: str
+    subdivision_code = None  # type: str
+    country_alpha_2 = None  # type: str
+    confidence = 0
+
+    def save(self):
+        cache.set(self.location, self)
+
+    @classmethod
+    def load(cls, location):
+        return cache.get(location)
+
+    @property
+    def county(self):
+        if self.county_label:
+            sd = CountrySubdivision.search(
+                search_term=self.county_label,
+                country_code=self.country_alpha_2)
+            if sd:
+                return sd[0]
+        return None
+
+    @property
+    def subdivision(self):
+        if self.subdivision_label:
+            sd = CountrySubdivision(
+                code=f"{self.country_alpha_2}-{self.subdivision_code}"
+            )
+            if sd:
+                return sd
+        return None
+
+    @property
+    def country(self):
+        return Country(alpha_2=self.country_alpha_2)
+
