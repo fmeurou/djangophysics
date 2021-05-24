@@ -39,6 +39,7 @@ class ECBService(RateService):
         self._available_currencies = rates_grid[0][1:]
 
     def _extract_rates(self, rates_grid):
+        dates = []
         for line in rates_grid[1:]:
             try:
                 d = datetime.strptime(line[0], '%d %B %Y').date()
@@ -48,11 +49,23 @@ class ECBService(RateService):
                 except ValueError as e:
                     raise RatesNotAvailableError(str(e)) from e
             self._rates_cache[d] = {}
+            dates.append(d)
             for i, cell in enumerate(line[1:]):
                 try:
                     self._rates_cache[d][rates_grid[0][i + 1]] = float(cell)
                 except ValueError:
                     pass
+        # Fill the blanks (week ends?)
+        sorted_dates = sorted(dates)
+        first_date = sorted_dates[0]
+        last_date = sorted_dates[-1]
+        last_rates = self._rates_cache[first_date]
+        for i in range((last_date-first_date).days):
+            d = (first_date + timedelta(i))
+            if d in self._rates_cache:
+                last_rates = self._rates_cache[d]
+            else:
+                self._rates_cache[d] = last_rates
 
     def _fetch_rates(self, source_type):
         """
