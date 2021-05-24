@@ -123,7 +123,6 @@ class ECBService(RateService):
             except KeyError:
                 logging.warning(f"No rate for this date {d}")
                 pass
-
         return filtered_rates
 
     def _get_rate(self, rate_date: dict,
