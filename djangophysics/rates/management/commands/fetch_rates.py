@@ -44,14 +44,13 @@ class Command(BaseCommand):
         today = date.today().strftime('%Y-%m-%d')
         try:
             from_date = datetime.strptime(
-                options.get('from_date') or today, '%Y-%m-%d')
+                options.get('from_date') or today, '%Y-%m-%d').date()
             to_date = datetime.strptime(
-                options.get('to_date') or today, '%Y-%m-%d')
+                options.get('to_date') or today, '%Y-%m-%d').date()
         except ValueError:
             print("invalid dates")
             exit(-1)
         rate_service = options.get('service') or 'ecb'
-
         for currency in Currency.all_currencies():
             self.stdout.write(
                 'fetching rates for currency {}.'.format(currency.code))
