@@ -614,9 +614,6 @@ class RateAPITest(TestCase):
         """
         Test key_isnull filter
         """
-        Rate.objects.fetch_rates(
-            base_currency=self.base_currency,
-            currency=self.currency)
         client = APIClient()
         token = Token.objects.get(user__username=self.user.username)
         client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
