@@ -526,28 +526,18 @@ class GeocoderTestCase(TestCase):
         """
         Testing Google service
         """
-        if settings.GEOCODER_GOOGLE_KEY:
-            geocoder = service(service_type='geocoding',
-                               service_name='google',
-                               key=settings.GEOCODER_GOOGLE_KEY)
-            self.assertEqual(geocoder.coder_type, 'google')
-        else:
-            with self.assertRaises(ValueError):
-                service(service_type='geocoding',
-                        service_name='google')
+        geocoder = service(service_type='geocoding',
+                           service_name='google')
+        self.assertEqual(geocoder.coder_type, 'google')
 
     def test_pelias(self):
         """
         Testing Pelias service
         """
-        if settings.GEOCODER_PELIAS_KEY:
-            geocoder = service(service_type='geocoding',
-                               service_name='pelias',
-                               server_url=PELIAS_TEST_URL,
-                               key=settings.GEOCODER_PELIAS_KEY)
-            self.assertEqual(geocoder.coder_type, 'pelias')
-        else:
-            print("GEOCODER_PELIAS_KEY not set, skipping test")
+        geocoder = service(service_type='geocoding',
+                           service_name='pelias',
+                           server_url=PELIAS_TEST_URL)
+        self.assertEqual(geocoder.coder_type, 'pelias')
 
     def test_google_search(self):
         """
@@ -555,9 +545,11 @@ class GeocoderTestCase(TestCase):
         """
         if settings.GEOCODER_GOOGLE_KEY:
             geocoder = service(service_type='geocoding',
-                               service_name='google',
-                               key=settings.GEOCODER_GOOGLE_KEY)
-            data = geocoder.search(address=TEST_ADDRESS)
+                               service_name='google')
+            data = geocoder.search(
+                address=TEST_ADDRESS,
+                key=settings.GEOCODER_GOOGLE_KEY
+            )
             self.assertIsNotNone(data)
         else:
             print("GEOCODER_GOOGLE_KEY not set, skipping test")
@@ -568,9 +560,11 @@ class GeocoderTestCase(TestCase):
         """
         if settings.GEOCODER_GOOGLE_KEY:
             geocoder = service(service_type='geocoding',
-                               service_name='google',
-                               key=settings.GEOCODER_GOOGLE_KEY)
-            data = geocoder.reverse(lat=TEST_LAT, lng=TEST_LNG)
+                               service_name='google')
+            data = geocoder.reverse(
+                lat=TEST_LAT,
+                lng=TEST_LNG,
+                key=settings.GEOCODER_GOOGLE_KEY)
             self.assertIsNotNone(data)
         else:
             print("GEOCODER_GOOGLE_KEY not set, skipping test")
@@ -582,9 +576,11 @@ class GeocoderTestCase(TestCase):
         if settings.GEOCODER_PELIAS_KEY:
             geocoder = service(service_type='geocoding',
                                service_name='pelias',
-                               server_url=PELIAS_TEST_URL,
-                               key=settings.GEOCODER_PELIAS_KEY)
-            data = geocoder.search(address=TEST_ADDRESS)
+                               server_url=PELIAS_TEST_URL)
+            data = geocoder.search(
+                address=TEST_ADDRESS,
+                key=settings.GEOCODER_PELIAS_KEY
+            )
             self.assertIsNotNone(data)
         else:
             print("GEOCODER_PELIAS_KEY not set, skipping test")
@@ -596,9 +592,12 @@ class GeocoderTestCase(TestCase):
         if settings.GEOCODER_PELIAS_KEY:
             geocoder = service(service_type='geocoding',
                                service_name='pelias',
-                               server_url=PELIAS_TEST_URL,
-                               key=settings.GEOCODER_PELIAS_KEY)
-            data = geocoder.reverse(lat=TEST_LAT, lng=TEST_LNG)
+                               server_url=PELIAS_TEST_URL)
+            data = geocoder.reverse(
+                lat=TEST_LAT,
+                lng=TEST_LNG,
+                key=settings.GEOCODER_PELIAS_KEY
+            )
             self.assertIsNotNone(data)
         else:
             print("GEOCODER_PELIAS_KEY not set, skipping test")
@@ -610,9 +609,11 @@ class GeocoderTestCase(TestCase):
         if settings.GEOCODER_PELIAS_KEY:
             geocoder = service(service_type='geocoding',
                                service_name='pelias',
-                               server_url=PELIAS_TEST_URL,
-                               key=settings.GEOCODER_PELIAS_KEY)
-            data = geocoder.search(address=TEST_ADDRESS)
+                               server_url=PELIAS_TEST_URL)
+            data = geocoder.search(
+                address=TEST_ADDRESS,
+                key=settings.GEOCODER_PELIAS_KEY
+            )
             self.assertIsNotNone(data)
             self.assertIn("FR", geocoder.parse_countries(data))
         else:
@@ -625,9 +626,12 @@ class GeocoderTestCase(TestCase):
         if settings.GEOCODER_PELIAS_KEY:
             geocoder = service(service_type='geocoding',
                                service_name='pelias',
-                               server_url=PELIAS_TEST_URL,
-                               key=settings.GEOCODER_PELIAS_KEY)
-            data = geocoder.reverse(lat=TEST_LAT, lng=TEST_LNG)
+                               server_url=PELIAS_TEST_URL)
+            data = geocoder.reverse(
+                lat=TEST_LAT,
+                lng=TEST_LNG,
+                key=settings.GEOCODER_PELIAS_KEY
+            )
             self.assertIsNotNone(data)
             if 'errors' in data:
                 print("ERROR - Pelias service not available")
@@ -642,9 +646,11 @@ class GeocoderTestCase(TestCase):
         """
         if settings.GEOCODER_GOOGLE_KEY:
             geocoder = service(service_type='geocoding',
-                               service_name='google',
-                               key=settings.GEOCODER_GOOGLE_KEY)
-            data = geocoder.search(address=TEST_ADDRESS)
+                               service_name='google')
+            data = geocoder.search(
+                address=TEST_ADDRESS,
+                key=settings.GEOCODER_GOOGLE_KEY
+            )
             self.assertIsNotNone(data)
             self.assertIn("FR", geocoder.parse_countries(data))
         else:
@@ -656,9 +662,12 @@ class GeocoderTestCase(TestCase):
         """
         if settings.GEOCODER_GOOGLE_KEY:
             geocoder = service(service_type='geocoding',
-                               service_name='google',
-                               key=settings.GEOCODER_GOOGLE_KEY)
-            data = geocoder.reverse(lat=TEST_LAT, lng=TEST_LNG)
+                               service_name='google')
+            data = geocoder.reverse(
+                lat=TEST_LAT,
+                lng=TEST_LNG,
+                key=settings.GEOCODER_GOOGLE_KEY
+            )
             self.assertIsNotNone(data)
             self.assertIn("FR", geocoder.parse_countries(data))
         else:

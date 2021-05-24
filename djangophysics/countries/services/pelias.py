@@ -35,7 +35,6 @@ class PeliasGeocoder(Geocoder):
         defaults to 'https://api.geocode.earth/v1/search'
         :param key: API key
         """
-        self.key = key or settings.GEOCODER_PELIAS_KEY
         try:
             pelias_url = settings.GEOCODER_PELIAS_URL
         except AttributeError:
@@ -74,23 +73,32 @@ class PeliasGeocoder(Geocoder):
             )
         return {}
 
-    def search(self, address: str, language: str = None,
-               bounds: str = None, region: str = None,
+    def search(self,
+               address: str,
+               key: str = None,
+               language: str = None,
+               bounds: str = None,
+               region: str = None,
                components: str = "") -> dict:
         """
         Search address
         :param address: Address to look for
+        :param key: Service API key
         :param language: The language in which to return results.
         :param bounds: Unused at the moment
         :param region: not used
         :param components: not used
         """
         search_args = {'text': address}
-        if self.key:
+        if key:
             search_args['api_key'] = self.key
         return self._query_server(f'{self.server_url}/search', search_args)
 
-    def reverse(self, lat: str, lng: str, language: str = None) -> dict:
+    def reverse(self,
+                lat: str,
+                lng: str,
+                key: str = None,
+                language: str = None) -> dict:
         """
         Reverse search by coordinates
         :param lat: latitude
@@ -101,8 +109,8 @@ class PeliasGeocoder(Geocoder):
             'point.lat': lat,
             'point.lon': lng,
         }
-        if self.key:
-            search_args['api_key'] = self.key
+        if key:
+            search_args['api_key'] = key
         return self._query_server(f'{self.server_url}/reverse', search_args)
 
     def parse_countries(self, data: dict) -> [str]:
@@ -136,10 +144,18 @@ class PeliasGeocoder(Geocoder):
                 address.street = feature['properties']['street']
                 address.postal_code = feature['properties']['postalcode']
                 address.locality = feature['properties']['locality']
-                address.county = feature['properties'].get('county', None)
-                address.subdivision = feature['properties'].get('region_a',
-                                                                None)
-                address.country = feature['properties']['country_a'][:2]
+                address.county_label = feature['properties'].get(
+                    'county',
+                    None)
+                address.subdivision_code = feature['properties'].get(
+                    'region_a',
+                    None)
+                address.subdivision_label = feature['properties'].get(
+                    'region',
+                    None)
+                address.country_alpha_2 = feature[
+                                              'properties'
+                                          ]['country_a'][:2]
                 addresses.append(address)
             except KeyError as e:
                 logging.warning(f'upparsable address {feature}')

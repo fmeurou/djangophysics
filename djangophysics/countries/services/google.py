@@ -26,22 +26,6 @@ class GoogleGeocoder(Geocoder):
         """
         return super(Geocoder, cls).__new__(cls)
 
-    def __init__(self, key: str = None, *args, **kwargs):
-        """
-        Google geocode engine
-        Init: Geocoder('google', 'API key')
-        """
-        try:
-            if not key and not settings.GEOCODER_GOOGLE_KEY:
-                raise ValueError(
-                    "This geocoder needs an API key, please provide a key"
-                    " or set GEOCODER_GOOGLE_KEY in configuration")
-        except AttributeError:
-            raise ValueError(
-                "This geocoder needs an API key, please provide a key "
-                "or set GEOCODER_GOOGLE_KEY in configuration")
-        self.key = key or settings.GEOCODER_GOOGLE_KEY
-
     def _parse_response(self, response) -> dict:
         """
         Handle response errors
@@ -96,22 +80,31 @@ class GoogleGeocoder(Geocoder):
             )
         return {}
 
-    def search(self, address: str, language: str = None, bounds=None,
-               region: str = None, components: str = "") -> dict:
+    def search(self,
+               address: str,
+               key: str,
+               language: str = None,
+               bounds: str = None,
+               region: str = None,
+               components: str = "") -> dict:
         """
         Google geocoding search
         Retrieves coordinates based on address
         """
         search_args = {
             'address': address,
-            'key': self.key,
+            'key': key,
             'language': language
         }
         return self._query_server(
             f'{GEOCODER_GOOGLE_URL}/geocode/json',
             search_args)
 
-    def reverse(self, lat: str, lng: str, language: str = None) -> dict:
+    def reverse(self,
+                lat: str,
+                lng: str,
+                key: str,
+                language: str = None) -> dict:
         """
         Google geocoding reverse
         :param lat: latitude
@@ -120,7 +113,7 @@ class GoogleGeocoder(Geocoder):
         """
         search_args = {
             'latlng': ",".join(map(str, [lat, lng])),
-            'key': self.key,
+            'key': key,
         }
         return self._query_server(
             f'{GEOCODER_GOOGLE_URL}/geocode/json',
@@ -158,12 +151,12 @@ class GoogleGeocoder(Geocoder):
                     if 'locality' in component['types']:
                         address.locality = component['long_name']
                     if 'administrative_area_level_2' in component['types']:
-                        address.county = component['long_name']
+                        address.county_label = component['long_name']
                     if 'administrative_area_level_1' in component['types']:
-                        address.subdivision = component['short_name']
+                        address.subdivision_code = component['short_name']
                         address.subdivision_label = component['long_name']
                     if 'country' in component['types']:
-                        address.country = component['short_name']
+                        address.country_alpha_2 = component['short_name']
                     if 'postal_code' in component['types']:
                         address.postal_code = component['long_name']
                 addresses.append(address)

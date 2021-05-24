@@ -292,7 +292,11 @@ class AddressSerializer(serializers.Serializer):
         label="Locality or city name"
     )
     county = serializers.SerializerMethodField(
-        label="County name or object",
+        label="County object",
+        required=False
+    )
+    county_label = serializers.CharField(
+        label="County name",
         required=False
     )
     subdivision = serializers.SerializerMethodField(
@@ -319,18 +323,14 @@ class AddressSerializer(serializers.Serializer):
         """
         Get Country from country alpha_2
         """
-        return CountrySerializer(
-            Country(alpha_2=obj.country)
-        ).data
+        return CountrySerializer(obj.country).data
 
     def get_subdivision(self, obj):
         """
         Get subdivision from subdivision code
         """
         if obj.subdivision:
-            sd = CountrySubdivision(code=f"{obj.country}-{obj.subdivision}")
-            if sd:
-                return CountrySubdivisionSerializer(sd).data
+            return CountrySubdivisionSerializer(obj.subdivision).data
         else:
             return obj.subdivision_label
 
@@ -339,10 +339,6 @@ class AddressSerializer(serializers.Serializer):
         Get county from county name
         """
         if obj.county:
-            sd = CountrySubdivision.search(
-                search_term=obj.county,
-                country_code=obj.country)
-            if sd:
-                return CountrySubdivisionSerializer(sd[0]).data
+            return CountrySubdivisionSerializer(obj.county).data
         else:
-            return obj.county
+            return None

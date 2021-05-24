@@ -34,28 +34,32 @@ class Geocoder:
         raise NotImplementedError("Use specific implementation")
 
     def search(self,
-               address,
-               language=None,
-               bounds=None,
-               region=None,
-               components=""):
+               address: str,
+               key: str = None,
+               language: str = None,
+               bounds: str = None,
+               region: str = None,
+               components: str = "") -> []:
         """
         Search an address
-        :params text: address to search for
-        :params language: optional, language of result
-        :params bounds: optional, limit results to bounds
-        :params region: optional, limit results to region
-        :params components: optional, a components filter
+        :param address: address to search for
+        :param key: Key to Service
+        :param language: optional, language of result
+        :param bounds: optional, limit results to bounds
+        :param region: optional, limit results to region
+        :param components: optional, a components filter
          with elements separated by a pipe (|)
-        :returns: Country
+        :returns: [Address]
         """
         raise NotImplementedError("Use specific implementation")
 
-    def reverse(self, lat, lng, language: str = None):
+    def reverse(self, lat: float, lng: float, key: str = None, language: str = None):
         """
         Search from GPS coordinates
-        :params lat: latitude
-        :params lng: longitude
+        :param lat: latitude
+        :param lng: longitude
+        :param key: Key to Service
+        :param language: language of the response
         """
         raise NotImplementedError("Use specific implementation")
 

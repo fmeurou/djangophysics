@@ -12,6 +12,7 @@ from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_cookie
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from drf_yasg.views import deferred_never_cache
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -23,6 +24,7 @@ from .models import Country, CountryNotFoundError, \
     CountrySubdivision, CountrySubdivisionNotFound
 from .serializers import CountrySerializer, CountryDetailSerializer, \
     CountrySubdivisionSerializer, AddressSerializer
+from .services import GeocoderRequestError
 
 
 class CountryViewset(ViewSet):
@@ -237,15 +239,19 @@ class CountryViewset(ViewSet):
         geocoder = service(
             service_type='geocoding',
             service_name=request.GET.get('geocoder',
-                                         settings.GEOCODING_SERVICE),
-            key=request.GET.get('geocoder_api_key',
-                                settings.GEOCODER_GOOGLE_KEY),
+                                         settings.GEOCODING_SERVICE)
         )
         try:
             data = geocoder.search(
                 address=request.GET.get('address'),
+                key=request.GET.get('geocoder_api_key',
+                                    settings.GEOCODER_GOOGLE_KEY),
                 language=language
             )
+        except TypeError as e:
+            logging.error("Invalid parameters")
+            logging.error(e)
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
         except json.JSONDecodeError as e:
             logging.error("Invalid response")
             logging.error(e)
@@ -257,6 +263,8 @@ class CountryViewset(ViewSet):
         except IOError as e:
             logging.error("Invalid request")
             logging.error(e)
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        except GeocoderRequestError as e:
             return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
         addresses = geocoder.addresses(data)
         serializer = AddressSerializer(
@@ -291,16 +299,20 @@ class CountryViewset(ViewSet):
         geocoder = service(
             service_type='geocoding',
             service_name=request.GET.get('geocoder',
-                                         settings.GEOCODING_SERVICE),
-            key=request.GET.get('geocoder_api_key',
-                                settings.GEOCODER_GOOGLE_KEY)
+                                         settings.GEOCODING_SERVICE)
         )
         try:
             data = geocoder.reverse(
                 lat=request.GET.get('latitude'),
                 lng=request.GET.get('longitude'),
+                key=request.GET.get('geocoder_api_key',
+                                    settings.GEOCODER_GOOGLE_KEY),
                 language=language
             )
+        except TypeError as e:
+            logging.error("Invalid parameters")
+            logging.error(e)
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
         except json.JSONDecodeError as e:
             logging.error("Invalid response")
             logging.error(e)
@@ -312,6 +324,8 @@ class CountryViewset(ViewSet):
         except IOError as e:
             logging.error("Invalid request")
             logging.error(e)
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        except GeocoderRequestError as e:
             return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
         addresses = geocoder.addresses(data)
         serializer = AddressSerializer(
