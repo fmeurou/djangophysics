@@ -169,6 +169,9 @@ class ExpressionSerializer(serializers.Serializer):
         except KeyError:
             self._errors['operands'] = "Missing operands"
             return False
+        except pint.errors.UndefinedUnitError:
+            self._errors['expression'] = "Invalid units"
+            return False
         except pint.errors.DimensionalityError:
             self._errors['expression'] = "Incoherent dimension"
             return False
