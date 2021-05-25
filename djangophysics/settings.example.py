@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     'django_filters',
     'corsheaders',
+    'ariadne.contrib.django',
     'djangophysics',
     'djangophysics.core',
     'djangophysics.countries',
