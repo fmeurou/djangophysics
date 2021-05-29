@@ -464,3 +464,14 @@ class CalculationPayloadSerializer(serializers.Serializer):
         self.key = validated_data.get('key', instance.key)
         self.eob = validated_data.get('eob', instance.eob)
         return instance
+
+
+class DimensionalitySerializer(serializers.Serializer):
+    """
+    Serializer for dimensionality
+    return a dimension with associated power
+    """
+    code = serializers.CharField(label="code of the dimension")
+    multiplicity = serializers.FloatField(
+        label="multiplicy of the dimension"
+    )

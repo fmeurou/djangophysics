@@ -98,6 +98,20 @@ class ComputationError(Exception):
     pass
 
 
+class Dimensionality:
+    code = None
+    multiplicity = None
+
+    def __init__(self, dimension_code: str, multiplicity: float):
+        """
+        Initialize Dimensionality
+        :param dimension_code: Code of the dimension
+        :param multiplicity: multiplicity of the dimension
+        """
+        self.code = dimension_code
+        self.multiplicity = multiplicity
+
+
 class Expression:
     """
     Expression with operands
@@ -172,6 +186,23 @@ class Expression:
         if not valid_dimension:
             return False, error
         return True, ''
+
+    def dimensionality(self, unit_system: UnitSystem) -> [Dimensionality]:
+        q_ = unit_system.ureg.Quantity
+        is_valid, error = self.validate(unit_system=unit_system)
+        if not is_valid:
+            return []
+        if self.out_units:
+            return [{'code': key, 'multiplicity': value} for key, value in q_(
+                    1, self.out_units
+            ).dimensionality.items()]
+        else:
+            kwargs = {v.name: q_(v.uvalue, v.unit) for v in self.operands}
+            result = unit_system.ureg.parse_expression(
+                self.expression, **kwargs
+            )
+            return [{'code': key, 'multiplicity': value}
+                    for key, value in result.dimensionality.items()]
 
     def evaluate(self, unit_system: UnitSystem) -> pint.Quantity:
         """
