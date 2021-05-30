@@ -5,6 +5,7 @@ Calculations module APIs viewsets
 import json
 
 from drf_yasg.utils import swagger_auto_schema
+from pint import UndefinedUnitError, DimensionalityError
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -17,7 +18,8 @@ from .exceptions import ExpressionCalculatorInitError
 from .models import ExpressionCalculator
 from .renderers import OperandUnitsRenderer
 from .serializers import ExpressionSerializer, \
-    CalculationPayloadSerializer, CalculationResultSerializer
+    CalculationPayloadSerializer, CalculationResultSerializer, \
+    DimensionalitySerializer
 
 
 class ValidateViewSet(APIView):
@@ -25,7 +27,9 @@ class ValidateViewSet(APIView):
     POST API View to validate formulas
     """
 
-    @swagger_auto_schema(request_body=ExpressionSerializer)
+    @swagger_auto_schema(request_body=ExpressionSerializer, responses={
+        '200': DimensionalitySerializer
+    })
     @action(['POST'], detail=False, url_path='', url_name="validate")
     def post(self, request, unit_system, *args, **kwargs):
         """
@@ -41,11 +45,19 @@ class ValidateViewSet(APIView):
         else:
             us = UnitSystem(unit_system)
         exp = ExpressionSerializer(data=request.data)
-        if exp.is_valid(unit_system=us, dimensions_only=True):
-            return Response("Valid expression")
-        else:
-            return Response(json.dumps(exp.errors),
-                            status=status.HTTP_406_NOT_ACCEPTABLE,
+        try:
+            if exp.is_valid(unit_system=us, dimensions_only=True):
+                expression = exp.create(exp.validated_data)
+                return Response(DimensionalitySerializer(
+                    expression.dimensionality(unit_system=us), many=True).data,
+                    content_type="application/json")
+            else:
+                return Response(json.dumps(exp.errors),
+                                status=status.HTTP_406_NOT_ACCEPTABLE,
+                                content_type="application/json")
+        except (UndefinedUnitError, DimensionalityError) as e:
+            return Response(str(e),
+                            status=status.HTTP_400_BAD_REQUEST,
                             content_type="application/json")
 
 

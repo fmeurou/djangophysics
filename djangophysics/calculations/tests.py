@@ -11,7 +11,6 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from djangophysics.units.models import UnitSystem
-
 from .models import ExpressionCalculator, Operand
 from .serializers import ExpressionSerializer
 
@@ -169,32 +168,39 @@ class ExpressionTest(TestCase):
         es = ExpressionSerializer(data=payload)
         self.assertFalse(es.is_valid(unit_system=self.us))
 
-    def test_formula_validation_request(self):
+    def test_valid_serializer_dimensionality(self):
         """
-        Test formula syntax validation
+        Test serializer validation
         """
-        client = APIClient()
-        response = client.post(
-            '/units/SI/formulas/validate/',
-            data=json.dumps({
-                'expression': "3*{a}+15*{b}",
-                "operands": [
-                    {
-                        "name": "a",
-                        "value": 0.1,
-                        "unit": "kg"
-                    },
-                    {
-                        "name": "b",
-                        "value": 15,
-                        "unit": "g"
-                    }
-                ]
-            }),
-            content_type="application/json"
+        payload = {
+            'expression': '(3*{a}*15*{b})*6*{c}',
+            'operands': [
+                {
+                    'name': 'a',
+                    'value': 0.1,
+                    'unit': 'm/s'
+                },
+                {
+                    'name': 'b',
+                    'value': 15,
+                    'unit': 'g/km*hour'
+                },
+                {
+                    'name': 'c',
+                    'value': 12,
+                    'unit': 's*kelvin'
+                }
+            ]
+        }
+        es = ExpressionSerializer(data=payload)
+        self.assertTrue(es.is_valid(unit_system=self.us))
+        expression = es.create(es.validated_data)
+        self.assertEqual(
+            expression.dimensionality(unit_system=self.us),
+            [{'code': '[mass]', 'multiplicity': 1},
+             {'code': '[temperature]', 'multiplicty': 1},
+             {'code': '[time]', 'multiplicity': 1}]
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
 
 class OperandTest(TestCase):
     """
@@ -317,7 +323,6 @@ class OperandTest(TestCase):
             op.get_unit(self.us)
         )
 
-
 class ExpressionAPITest(TestCase):
     """
     Test Expression API
@@ -328,6 +333,79 @@ class ExpressionAPITest(TestCase):
         Setup test environment
         """
         self.us = UnitSystem(system_name='SI')
+
+    def test_formula_validation_request(self):
+        """
+        Test formula syntax validation
+        """
+        client = APIClient()
+        response = client.post(
+            '/units/SI/formulas/validate/',
+            data=json.dumps({
+                'expression': '(3*{a}*15*{b})*6*{c}',
+                'operands': [
+                    {
+                        'name': 'a',
+                        'value': 0.1,
+                        'unit': 'm/s'
+                    },
+                    {
+                        'name': 'b',
+                        'value': 15,
+                        'unit': 'g/km*hour'
+                    },
+                    {
+                        'name': 'c',
+                        'value': 12,
+                        'unit': 's*kelvin'
+                    }
+                ]
+            }),
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(sorted(json.loads(response.content), key=lambda x: x['code']),
+                         sorted([{'code': '[mass]', 'multiplicity': 1.0},
+                          {'code': '[temperature]', 'multiplicity': 1.0},
+                          {'code': '[time]', 'multiplicity': 1.0}],
+                                key=lambda x: x['code']))
+
+    def test_formula_validation_out_units_request(self):
+        """
+        Test formula output dimensions validation
+        """
+        client = APIClient()
+        response = client.post(
+            '/units/SI/formulas/validate/',
+            data=json.dumps({
+                'expression': '(3*{a}*15*{b})*6*{c}',
+                'operands': [
+                    {
+                        'name': 'a',
+                        'value': 0.1,
+                        'unit': 'm/s'
+                    },
+                    {
+                        'name': 'b',
+                        'value': 15,
+                        'unit': 'g/km*hour'
+                    },
+                    {
+                        'name': 'c',
+                        'value': 12,
+                        'unit': 's*kelvin'
+                    }
+                ],
+                'out_units': 'ton*fahrenheit*hour'
+            }),
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(sorted(json.loads(response.content), key=lambda x: x['code']),
+                         sorted([{'code': '[mass]', 'multiplicity': 1.0},
+                          {'code': '[temperature]', 'multiplicity': 1.0},
+                          {'code': '[time]', 'multiplicity': 1.0}],
+                                key=lambda x: x['code']))
 
     def test_formula_validation_variable_exception_request(self):
         """
@@ -375,7 +453,6 @@ class ExpressionAPITest(TestCase):
             content_type="application/json"
         )
         self.assertEqual(response.status_code, status.HTTP_406_NOT_ACCEPTABLE)
-
 
 class ExpressionCalculatorTest(TestCase):
     """
@@ -591,7 +668,6 @@ class ExpressionCalculatorTest(TestCase):
         self.assertEqual(len(result.detail), len(self.calculator.data))
         self.assertEqual(result.detail[0].unit, 'pound')
         self.assertEqual(result.detail[1].unit, 'milligram')
-
 
 class ExpressionCalculatorAPITest(TestCase):
     """
