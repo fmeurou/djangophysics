@@ -52,15 +52,16 @@ class ECBService(RateService):
             dates.append(d)
             for i, cell in enumerate(line[1:]):
                 try:
-                    self._rates_cache[d][rates_grid[0][i + 1]] = float(cell)
+                    self._rates_cache[d][
+                        rates_grid[0][i + 1].strip()] = float(cell)
                 except ValueError:
                     pass
         # Fill the blanks (week ends?)
         sorted_dates = sorted(dates)
         first_date = sorted_dates[0]
-        last_date = sorted_dates[-1]
+        last_date = dt.today()
         last_rates = self._rates_cache[first_date]
-        for i in range((last_date-first_date).days):
+        for i in range((last_date-first_date).days + 1):
             d = (first_date + timedelta(i))
             if d in self._rates_cache:
                 last_rates = self._rates_cache[d]

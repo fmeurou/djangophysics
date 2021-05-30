@@ -210,7 +210,7 @@ class GraphQLTest(TestCase):
         """
         Test Currency rates_to and rates_from functions
         """
-        d = (datetime.date.today() - datetime.timedelta(1)).strftime('%Y-%m-%d')
+        d = datetime.date.today().strftime('%Y-%m-%d')
         Rate.objects.fetch_rates(
             currency="EUR",
             base_currency="USD"
@@ -243,7 +243,6 @@ class GraphQLTest(TestCase):
             data=gql,
             format='json')
         resp = response.json()
-        print(resp['data']['currency'])
         self.assertIsNone(resp.get('errors'))
         self.assertIsNotNone(resp.get('data'))
         self.assertIn('currency', resp['data'])

@@ -103,8 +103,6 @@ class RateManager(models.Manager):
         :return: QuerySet of Rate
         """
         service_name = rate_service or settings.RATE_SERVICE
-        if date_obj == date.today():
-            date_obj = date_obj - datetime.timedelta(1)
         try:
             rates = service(
                 service_type='rates',
@@ -116,7 +114,7 @@ class RateManager(models.Manager):
                 to_obj=to_obj)
             if not rates:
                 return False
-        except RatesNotAvailableError:
+        except RatesNotAvailableError as e:
             logging.warning("fetch_rates: Rates not available")
             return False
         return self.__sync_rates__(rates=rates, base_currency=base_currency)
@@ -154,8 +152,6 @@ class RateManager(models.Manager):
         :param date_obj: Date to obtain the conversion rate for
         :return List of currency codes to go from currency to base currency
         """
-        if date_obj == date.today():
-            date_obj = date_obj - timedelta(1)
         rates = Rate.objects.filter(value_date=date_obj).filter(
             models.Q(user=None) | models.Q(key=key))
         rates_couples = rates.values(
@@ -178,7 +174,7 @@ class RateManager(models.Manager):
                 f"key {key} at date {date_obj} does not exist") \
                 from exc
 
-    def find_rate(self, currency: str,
+    def  find_rate(self, currency: str,
                   rate_service: str = None,
                   key: str = None,
                   base_currency: str = settings.BASE_CURRENCY,
@@ -195,8 +191,6 @@ class RateManager(models.Manager):
         :param rate_service: Rate service to use
         :param use_forex: use rate service to fill the gaps
         """
-        if date_obj == date.today():
-            date_obj = date_obj - datetime.timedelta(1)
         if use_forex:
             if not self.fetch_rates(
                     base_currency=base_currency,

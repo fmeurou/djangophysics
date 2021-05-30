@@ -195,12 +195,12 @@ class ExpressionTest(TestCase):
         es = ExpressionSerializer(data=payload)
         self.assertTrue(es.is_valid(unit_system=self.us))
         expression = es.create(es.validated_data)
+        keys = ['[mass]', '[temperature]', '[time]']
         self.assertEqual(
-            expression.dimensionality(unit_system=self.us),
-            [{'code': '[mass]', 'multiplicity': 1},
-             {'code': '[temperature]', 'multiplicty': 1},
-             {'code': '[time]', 'multiplicity': 1}]
-        )
+            len(expression.dimensionality(unit_system=self.us)), 3)
+        for dim in expression.dimensionality(unit_system=self.us):
+            self.assertIn(dim['code'], keys)
+            
 
 class OperandTest(TestCase):
     """
@@ -323,6 +323,7 @@ class OperandTest(TestCase):
             op.get_unit(self.us)
         )
 
+
 class ExpressionAPITest(TestCase):
     """
     Test Expression API
@@ -366,8 +367,8 @@ class ExpressionAPITest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(sorted(json.loads(response.content), key=lambda x: x['code']),
                          sorted([{'code': '[mass]', 'multiplicity': 1.0},
-                          {'code': '[temperature]', 'multiplicity': 1.0},
-                          {'code': '[time]', 'multiplicity': 1.0}],
+                                 {'code': '[temperature]', 'multiplicity': 1.0},
+                                 {'code': '[time]', 'multiplicity': 1.0}],
                                 key=lambda x: x['code']))
 
     def test_formula_validation_out_units_request(self):
@@ -403,8 +404,8 @@ class ExpressionAPITest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(sorted(json.loads(response.content), key=lambda x: x['code']),
                          sorted([{'code': '[mass]', 'multiplicity': 1.0},
-                          {'code': '[temperature]', 'multiplicity': 1.0},
-                          {'code': '[time]', 'multiplicity': 1.0}],
+                                 {'code': '[temperature]', 'multiplicity': 1.0},
+                                 {'code': '[time]', 'multiplicity': 1.0}],
                                 key=lambda x: x['code']))
 
     def test_formula_validation_variable_exception_request(self):
@@ -453,6 +454,7 @@ class ExpressionAPITest(TestCase):
             content_type="application/json"
         )
         self.assertEqual(response.status_code, status.HTTP_406_NOT_ACCEPTABLE)
+
 
 class ExpressionCalculatorTest(TestCase):
     """
@@ -668,6 +670,7 @@ class ExpressionCalculatorTest(TestCase):
         self.assertEqual(len(result.detail), len(self.calculator.data))
         self.assertEqual(result.detail[0].unit, 'pound')
         self.assertEqual(result.detail[1].unit, 'milligram')
+
 
 class ExpressionCalculatorAPITest(TestCase):
     """

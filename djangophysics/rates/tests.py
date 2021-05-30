@@ -212,7 +212,7 @@ class RateTest(TestCase):
             currency='ARS',
             base_currency='AFN',
             value=0.123,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         Rate.objects.create(
             user=self.user,
@@ -220,7 +220,7 @@ class RateTest(TestCase):
             currency='AFN',
             base_currency='BND',
             value=200,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         Rate.objects.create(
             user=self.user,
@@ -228,7 +228,7 @@ class RateTest(TestCase):
             currency='BND',
             base_currency='JPY',
             value=13,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         rates = Rate.objects.currency_shortest_path(
             currency='ARS', base_currency='EUR',
@@ -275,7 +275,7 @@ class RateTest(TestCase):
             currency='ARS',
             base_currency='AFN',
             value=0.123,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         Rate.objects.create(
             user=self.user,
@@ -283,7 +283,7 @@ class RateTest(TestCase):
             currency='AFN',
             base_currency='BND',
             value=200,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         Rate.objects.create(
             user=self.user,
@@ -291,7 +291,7 @@ class RateTest(TestCase):
             currency='BND',
             base_currency='JPY',
             value=13,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         rate = Rate.objects.find_rate(
             base_currency='JPY',
@@ -311,7 +311,7 @@ class RateTest(TestCase):
             currency='ARS',
             base_currency='AFN',
             value=0.123,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         Rate.objects.create(
             user=self.user,
@@ -319,7 +319,7 @@ class RateTest(TestCase):
             currency='AFN',
             base_currency='BND',
             value=200,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         Rate.objects.create(
             user=self.user,
@@ -327,12 +327,12 @@ class RateTest(TestCase):
             currency='BND',
             base_currency='JPY',
             value=13,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         jpy_eur = Rate.objects.get(
             base_currency='EUR',
             currency='JPY',
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         rate = Rate.objects.find_rate(
             base_currency='EUR',
@@ -353,7 +353,7 @@ class RateTest(TestCase):
             currency='ARS',
             base_currency='AFN',
             value=0.123,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         Rate.objects.create(
             user=self.user,
@@ -361,7 +361,7 @@ class RateTest(TestCase):
             currency='AFN',
             base_currency='BND',
             value=200,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         Rate.objects.create(
             user=self.user,
@@ -369,7 +369,7 @@ class RateTest(TestCase):
             currency='BND',
             base_currency='JPY',
             value=13,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         jpy_eur_custom = Rate.objects.create(
             user=self.user,
@@ -377,18 +377,18 @@ class RateTest(TestCase):
             currency='JPY',
             base_currency='EUR',
             value=100,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         Rate.objects.get(
             base_currency='EUR',
             currency='JPY',
             user__isnull=True,
-            value_date=datetime.date.today() - datetime.timedelta(1)
+            value_date=datetime.date.today()
         )
         rate = Rate.objects.find_rate(
             base_currency='EUR',
             currency='ARS',
-            date_obj=datetime.date.today() - datetime.timedelta(1),
+            date_obj=datetime.date.today(),
             key=self.key)
         self.assertEqual(rate.value, 0.123 * 200 * 13 * jpy_eur_custom.value)
 
