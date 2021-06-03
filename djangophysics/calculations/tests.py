@@ -200,7 +200,7 @@ class ExpressionTest(TestCase):
             len(expression.dimensionality(unit_system=self.us)), 3)
         for dim in expression.dimensionality(unit_system=self.us):
             self.assertIn(dim['code'], keys)
-            
+
 
 class OperandTest(TestCase):
     """

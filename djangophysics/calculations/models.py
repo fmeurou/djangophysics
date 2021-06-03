@@ -71,7 +71,7 @@ class Operand:
         for dimension_name in re.findall(exp, self.unit):
             try:
                 dim = Dimension(unit_system=unit_system, code=dimension_name)
-                replace_dict[dimension_name] = str(dim.units().pop())
+                replace_dict[dimension_name] = str(dim.units.pop())
             except DimensionNotFound:
                 pass
         # Replace in formula
