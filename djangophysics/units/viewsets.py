@@ -200,9 +200,9 @@ class UnitViewset(ViewSet):
                 try:
                     dimension = Dimension(unit_system=us,
                                           code=dimension_param)
-                    units = dimension.units(user=user, key=key)
-                except DimensionNotFound:
-                    return Response('Invalid dimension filter',
+                    units = dimension.units
+                except (DimensionNotFound, UnitNotFound) as e:
+                    return Response(f'Invalid dimension filter: {str(e)}',
                                     status=status.HTTP_400_BAD_REQUEST)
             else:
                 available_units = us.available_unit_names()

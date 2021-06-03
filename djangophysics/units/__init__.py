@@ -242,7 +242,7 @@ DIMENSIONS = {
                      'symbol': ''
                      },
     '[custom]': {'name': _('Custom dimension'),
-                 'dimension': 'undefined', 'symbol': ''},
+                 'dimension': 'undefined', 'symbol': ''}
 }
 
 UNIT_SYSTEM_BASE_AND_DERIVED_UNITS = {
@@ -270,7 +270,7 @@ UNIT_SYSTEM_BASE_AND_DERIVED_UNITS = {
         '[inductance]': 'henry',
         '[luminous_flux]': 'lumen',
         '[illuminance]': 'lux',
-        '[activity]': 'katal',
+        '[activity]': 'katal'
     },
     'Planck': {
         '[length]': 'planck_length',
@@ -375,7 +375,7 @@ ADDITIONAL_BASE_UNITS = {
             'name': _('cubic meter'),
             'symbol': 'm³',
             'relation': '1 meter ** 3'
-        },
+        }
     }
 }
 

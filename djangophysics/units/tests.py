@@ -82,7 +82,7 @@ class DimensionTest(TestCase):
         """
         us = UnitSystem()
         dimension = Dimension(unit_system=us, code='[length]')
-        unit_codes = [unit.code for unit in dimension.units()]
+        unit_codes = [unit.code for unit in dimension.units]
         self.assertIn('meter', unit_codes)
 
     def test_compounded_dimension_units(self):
@@ -91,7 +91,7 @@ class DimensionTest(TestCase):
         """
         us = UnitSystem()
         dimension = Dimension(unit_system=us, code='[compounded]')
-        unit_codes = [unit.code for unit in dimension.units()]
+        unit_codes = [unit.code for unit in dimension.units]
         self.assertIn('number_english', unit_codes)
 
     def test_custom_dimension_superuser_units(self):
@@ -100,7 +100,7 @@ class DimensionTest(TestCase):
         """
         us = UnitSystem(user=self.admin)
         dimension = Dimension(unit_system=us, code='[custom]')
-        self.assertEqual(len(dimension.units(user=self.admin)), 2)
+        self.assertEqual(len(dimension.units), 2)
 
     def test_custom_dimension_superuser_key_units(self):
         """
@@ -109,8 +109,7 @@ class DimensionTest(TestCase):
         """
         us = UnitSystem(user=self.admin, key=str(self.key))
         dimension = Dimension(unit_system=us, code='[custom]')
-        self.assertEqual(len(dimension.units(user=self.admin,
-                                             key=self.key)), 1)
+        self.assertEqual(len(dimension.units), 1)
 
     def test_custom_dimension_user_units(self):
         """
@@ -118,7 +117,7 @@ class DimensionTest(TestCase):
         """
         us = UnitSystem(user=self.user)
         dimension = Dimension(unit_system=us, code='[custom]')
-        self.assertEqual(len(dimension.units(user=self.user)), 2)
+        self.assertEqual(len(dimension.units), 2)
 
     def test_custom_dimension_user_key_units(self):
         """
@@ -126,16 +125,15 @@ class DimensionTest(TestCase):
         """
         us = UnitSystem(user=self.user, key=str(self.key))
         dimension = Dimension(unit_system=us, code='[custom]')
-        self.assertEqual(len(dimension.units(user=self.user,
-                                             key=self.key)), 1)
+        self.assertEqual(len(dimension.units), 1)
 
     def test_custom_dimension_no_user_units(self):
         """
         Test units list if no user
         """
-        us = UnitSystem(user=self.user)
+        us = UnitSystem()
         dimension = Dimension(unit_system=us, code='[custom]')
-        self.assertEqual(len(dimension.units()), 0)
+        self.assertEqual(len(dimension.units), 0)
 
 
 class UnitTest(TestCase):
@@ -278,7 +276,7 @@ class UnitAPITest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.json()),
                          len(Dimension(unit_system=us,
-                                       code='[length]').units()))
+                                       code='[length]').units))
 
     def test_list_with_compounded_dimension_request(self):
         """
@@ -295,7 +293,7 @@ class UnitAPITest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.json()),
                          len(Dimension(unit_system=us,
-                                       code='[compounded]').units()))
+                                       code='[compounded]').units))
 
     def test_list_with_dimension_2_request(self):
         """
@@ -312,7 +310,7 @@ class UnitAPITest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.json()),
                          len(Dimension(unit_system=us,
-                                       code='[area]').units()))
+                                       code='[area]').units))
 
     def test_retrieve_request(self):
         """

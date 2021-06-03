@@ -7,10 +7,11 @@ from datetime import date, datetime
 
 from drf_yasg.utils import swagger_serializer_method
 from rest_framework import serializers
+from rest_framework.fields import empty
 
 from djangophysics.core.serializers import UserSerializer
 from .models import Quantity, UnitConversionPayload, Dimension, \
-    CustomUnit, Unit
+    CustomUnit, Unit, UnitSystem
 
 
 class QuantitySerializer(serializers.Serializer):
@@ -143,6 +144,7 @@ class DimensionWithUnitsSerializer(DimensionSerializer):
     """
     Serialize a Dimension including associated units
     """
+    units_per_dimension = None
     units = UnitSerializer(label="Units of this dimension", many=True)
 
     @swagger_serializer_method(serializer_or_field=UnitSerializer)
@@ -150,8 +152,10 @@ class DimensionWithUnitsSerializer(DimensionSerializer):
         """
         Get units for this dimension
         """
+
+        units_per_dimension = obj.unit_system.units_per_dimension()
         try:
-            return obj.units()
+            return units_per_dimension.get(obj.code, [])
         except KeyError as e:
             logging.error(str(e))
             return []
