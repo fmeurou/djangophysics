@@ -15,9 +15,10 @@ from rest_framework.test import APIClient
 
 from . import ADDITIONAL_BASE_UNITS
 from .exceptions import UnitSystemNotFound, UnitDuplicateError, \
-    UnitDimensionError, UnitValueError
+    UnitDimensionError, UnitValueError, DimensionDuplicateError, \
+    DimensionValueError, DimensionDimensionError, DimensionNotFound
 from .models import UnitSystem, UnitConverter, \
-    Dimension, DimensionNotFound, CustomUnit
+    Dimension, DimensionNotFound, CustomUnit, CustomDimension
 from .serializers import QuantitySerializer
 
 
@@ -777,6 +778,416 @@ class UnitConverterAPITest(TestCase):
         self.assertEqual(response.json().get('status'),
                          UnitConverter.INSERTING_STATUS)
         self.assertEqual(response.json().get('id'), str(batch_id))
+
+
+class CustomDimensionTest(TestCase):
+    """
+    CustomDimension tests
+    """
+
+    def setUp(self) -> None:
+        """
+        Setup environment
+        """
+        self.user, created = User.objects.get_or_create(
+            username='test',
+            email='test@ipd.com'
+        )
+        self.user.set_password('test')
+        self.user.save()
+        Token.objects.create(user=self.user)
+        self.key = uuid.uuid4()
+
+    def test_creation(self):
+        """
+        Test creation of a CustomDimension
+        """
+        cu = CustomDimension.objects.create(
+            user=self.user,
+            key=self.key,
+            unit_system='SI',
+            code='[my_dimension]',
+            name='My Dimension',
+            relation="[time] * [length]")
+        self.assertEqual(cu.user, self.user)
+        self.assertEqual(cu.key, self.key)
+        self.assertEqual(cu.unit_system, 'SI')
+        self.assertEqual(cu.code, '[my_dimension]')
+        self.assertEqual(cu.name, 'My Dimension')
+        self.assertEqual(cu.relation, '[time] * [length]')
+        self.assertEqual(
+            CustomDimension.objects.filter(
+                user=self.user, key=self.key,
+                unit_system='SI', code='[my_dimension]').count(),
+            1)
+        us = UnitSystem(system_name='SI', user=self.user, key=self.key)
+        self.assertIn('[my_dimension]', us.available_dimension_names())
+
+    def test_creation_with_dash(self):
+        """
+        Test creation of a CustomUnit with - in code, symbol and alias
+        """
+        cu = CustomDimension.objects.create(
+            user=self.user,
+            key=self.key,
+            unit_system='SI',
+            code='[my-dimension]',
+            name='My Dimension',
+            relation="[time] * [length]"
+        )
+        self.assertEqual(cu.user, self.user)
+        self.assertEqual(cu.key, self.key)
+        self.assertEqual(cu.unit_system, 'SI')
+        self.assertEqual(cu.code, '[my_dimension]')
+        self.assertEqual(cu.name, 'My Dimension')
+        self.assertEqual(cu.relation, '[time] * [length]')
+        self.assertEqual(
+            CustomDimension.objects.filter(
+                user=self.user, key=self.key,
+                unit_system='SI', code='[my_dimension]').count(),
+            1)
+
+    def test_invalid_creation_params(self):
+        """
+        Test invalid creation params
+        """
+        self.assertRaises(
+            UnitSystemNotFound,
+            CustomDimension.objects.create,
+            user=self.user,
+            key=self.key,
+            unit_system='SO',
+            code='[my_dimension]',
+            name='My Dimension',
+            relation="[time] * [length]"
+        )
+
+    def test_duplicate_dimension_params(self):
+        """
+        Test duplicated unit
+        """
+        self.assertRaises(
+            DimensionDuplicateError,
+            CustomDimension.objects.create,
+            user=self.user,
+            key=self.key,
+            unit_system='SI',
+            code='[length]',
+            name='My Dimension',
+            relation="[length]"
+        )
+
+    def test_duplicate_dimension_relation_params(self):
+        """
+        Test duplicated unit
+        """
+        self.assertRaises(
+            DimensionDuplicateError,
+            CustomDimension.objects.create,
+            user=self.user,
+            key=self.key,
+            unit_system='SI',
+            code='[mojo]',
+            name='My Dimension',
+            relation="[length]"
+        )
+
+    def test_wrong_dimensionality_dimension_params(self):
+        """
+        Test unit creation with wrong dimensionality
+        """
+        self.assertRaises(
+            DimensionDimensionError,
+            CustomDimension.objects.create,
+            user=self.user,
+            key=self.key,
+            unit_system='SI',
+            code='[my_dimension]',
+            name='My Dimension',
+            relation="[tome] * [au] * [fromage]"
+        )
+
+
+class CustomDimensionTestAPI(TestCase):
+    """
+    CustomUnit API tests
+    """
+
+    def setUp(self) -> None:
+        """
+        Setup environment
+        """
+        self.user, created = User.objects.get_or_create(
+            username='test',
+            email='test@ipd.com'
+        )
+        self.user.set_password('test')
+        self.user.save()
+        Token.objects.create(user=self.user)
+        self.key = uuid.uuid4()
+
+    def test_list_request(self):
+        """
+        Test list of custom dimensions
+        """
+        client = APIClient()
+        response = client.get(
+            '/units/SI/dimensions/custom/',
+            format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_connected_list_request(self):
+        """
+        Test list of custom dimensions with connected user
+        """
+        client = APIClient()
+        token = Token.objects.get(user__username=self.user.username)
+        client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
+        post_response = client.post(
+            '/units/SI/dimensions/',
+            data={
+                'code': '[my_dimension]',
+                'name': 'My Dimension',
+                'relation': "[energy] / [time]"
+            }
+        )
+        self.assertEqual(post_response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('code', post_response.json())
+        response = client.get(
+            '/units/SI/dimensions/custom/',
+            format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        if 'results' in response.json():
+            # Paginated results
+            self.assertEqual(len(response.json()['results']), 1)
+            self.assertEqual(response.json()['results'][0]['code'],
+                             '[my_dimension]')
+        else:
+            # Non paginated results
+            self.assertEqual(len(response.json()), 1)
+            self.assertEqual(response.json()[0]['code'], 'my_dimension')
+
+    def test_connected_duplicate_post(self):
+        """
+        Test list of custom dimensions with connected user
+        """
+        client = APIClient()
+        token = Token.objects.get(user__username=self.user.username)
+        client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
+        post_response = client.post(
+            '/units/SI/dimensions/custom/',
+            data={
+                'code': '[my_dimension]',
+                'name': 'My Dimension',
+                'relation': "[energy] / [time]"
+            }
+        )
+        self.assertEqual(post_response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('code', post_response.json())
+        post_response = client.post(
+            '/units/SI/dimensions/custom/',
+            data={
+                'code': '[my_dimension]',
+                'name': 'My Dimension',
+                'relation': "[energy] / [time]"
+            }
+        )
+        self.assertEqual(post_response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_connected_unit_system_request(self):
+        """
+        Test list of custom dimensions with connected user
+        """
+        client = APIClient()
+        token = Token.objects.get(user__username=self.user.username)
+        client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
+        post_response = client.post(
+            '/units/SI/dimensions/custom/',
+            data={
+                'code': '[my_dimension]',
+                'name': 'My Dimension',
+                'relation': "[energy] / [time]"
+            }
+        )
+        self.assertEqual(post_response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('code', post_response.json())
+        response = client.get(
+            '/units/SI/dimensions/custom/',
+            format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        if 'results' in response.json():
+            # Paginated results
+            self.assertEqual(len(response.json()['results']), 1)
+            self.assertEqual(response.json()['results'][0]['code'],
+                             '[my_dimension]')
+        else:
+            # Non paginated results
+            self.assertEqual(len(response.json()), 1)
+            self.assertEqual(response.json()[0]['code'], '[my_dimension]')
+        response = client.get(
+            '/units/mks/dimensions/custom/',
+            format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        if 'results' in response.json():
+            # Paginated results
+            self.assertEqual(len(response.json()['results']), 0)
+        else:
+            # Non paginated results
+            self.assertEqual(len(response.json()), 0)
+
+    def test_connected_list_key_request(self):
+        """
+        Test list of custom dimensions with connected user and a key
+        """
+        client = APIClient()
+        token = Token.objects.get(user__username=self.user.username)
+        client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
+        post_response = client.post(
+            '/units/SI/dimensions/custom/',
+            data={
+                'key': self.key,
+                'code': '[my_dimension]',
+                'name': 'My Dimension',
+                'relation': "[energy] / [time]"
+            }
+        )
+        self.assertEqual(post_response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('code', post_response.json())
+        response = client.get(
+            '/units/SI/dimensions/custom/',
+            format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        if 'results' in response.json():
+            # Paginated results
+            self.assertEqual(len(response.json()['results']), 1)
+            self.assertEqual(response.json()['results'][0]['code'], '[my_dimension]')
+        else:
+            # Non paginated results
+            self.assertEqual(len(response.json()), 1)
+            self.assertEqual(response.json()[0]['code'], '[my_dimension]')
+
+    def test_connected_unit_list_request(self):
+        """
+        Test list of dimensions with custom dimension and connected user
+        """
+        CustomDimension.objects.create(
+            user=self.user,
+            key=self.key,
+            unit_system='SI',
+            code='[ny_dimension]',
+            name='Ny Dimension',
+            relation="[energy] / [mass] * [time]")
+        client = APIClient()
+        token = Token.objects.get(user__username=self.user.username)
+        client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
+        response = client.get(
+            '/units/SI/dimensions/units/',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        if 'results' in response.json():
+            self.assertIn('[ny_dimension]', [u['code']
+                                      for u in response.json()['results']])
+        else:
+            self.assertIn('[ny_dimension]', [u['code'] for u in response.json()])
+
+    def test_connected_unit_list_2_request(self):
+        """
+        Another test of a list of dimensions with a custom dimension
+        """
+        new_key = uuid.uuid4()
+        CustomDimension.objects.create(
+            user=self.user,
+            key=self.key,
+            unit_system='SI',
+            code='[ny_dimension]',
+            name='Ny Dimension',
+            relation="[energy] * [conductance] / [time]")
+        CustomDimension.objects.create(
+            user=self.user,
+            key=new_key,
+            unit_system='SI',
+            code='[py_dimension]',
+            name='Py Dimension',
+            relation="[energy] * [conductance] / [time]")
+        client = APIClient()
+        token = Token.objects.get(user__username=self.user.username)
+        client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
+        response = client.get(
+            '/units/SI/dimensions/',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        if 'results' in response.json():
+            self.assertIn('[ny_dimension]', [u['code']
+                                      for u in response.json()['results']])
+            self.assertIn('[py_dimension]', [u['code']
+                                      for u in response.json()['results']])
+        else:
+            self.assertIn('[ny_dimension]', [u['code'] for u in response.json()])
+            self.assertIn('[py_dimension]', [u['code'] for u in response.json()])
+
+    def test_connected_unit_list_new_key_request(self):
+        """
+        Test key isolation
+        """
+        new_key = uuid.uuid4()
+        CustomDimension.objects.create(
+            user=self.user,
+            key=self.key,
+            unit_system='SI',
+            code='[ny_dimension]',
+            name='Ny Unit',
+            relation="[time] * [temperature] * [length]")
+        CustomDimension.objects.create(
+            user=self.user,
+            key=new_key,
+            unit_system='SI',
+            code='[py_dimension]',
+            name='Py Dimension',
+            relation="[volume] / [surface]")
+        client = APIClient()
+        token = Token.objects.get(user__username=self.user.username)
+        client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
+        response = client.get(
+            '/units/SI/dimensions/custom/',
+            data={
+                'key': new_key
+            }
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn('[ny_dimension]', [u['code'] for u in response.json()])
+        self.assertIn('[py_dimension]', [u['code'] for u in response.json()])
+
+    def test_connected_unit_list_self_key_request(self):
+        """
+        Another isolation test
+        """
+        new_key = uuid.uuid4()
+        CustomDimension.objects.create(
+            user=self.user,
+            key=self.key,
+            unit_system='SI',
+            code='[ny_dimension]',
+            name='Ny Dimension',
+            relation="[time] * [length]")
+        CustomDimension.objects.create(
+            user=self.user,
+            key=new_key,
+            unit_system='SI',
+            code='[py_dimension]',
+            name='Py Dimension',
+            relation="[conductance] * [resistance]")
+        client = APIClient()
+        token = Token.objects.get(user__username=self.user.username)
+        client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
+        response = client.get(
+            '/units/SI/dimensions/custom/',
+            data={
+                'key': self.key
+            }
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('[ny_dimension]', [u['code'] for u in response.json()])
+        self.assertNotIn('[py_dimension]', [u['code'] for u in response.json()])
 
 
 class CustomUnitTest(TestCase):

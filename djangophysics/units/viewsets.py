@@ -27,12 +27,15 @@ from . import DIMENSIONS
 from .exceptions import UnitConverterInitError, UnitSystemNotFound, \
     UnitNotFound, DimensionNotFound, UnitValueError
 from .filters import CustomUnitFilter
-from .forms import CustomUnitForm
-from .models import UnitSystem, UnitConverter, Dimension, CustomUnit
-from .permissions import CustomUnitObjectPermission
+from .forms import CustomUnitForm, CustomDimensionForm
+from .models import UnitSystem, UnitConverter, Dimension, CustomUnit, \
+    CustomDimension
+from .permissions import CustomUnitObjectPermission, \
+    CustomDimensionObjectPermission
 from .serializers import UnitSerializer, UnitSystemSerializer, \
     UnitConversionPayloadSerializer, DimensionSerializer, \
-    DimensionWithUnitsSerializer, CustomUnitSerializer
+    DimensionWithUnitsSerializer, CustomUnitSerializer, \
+    CustomDimensionSerializer
 
 
 class UnitSystemViewset(ViewSet):
@@ -372,6 +375,123 @@ class ConvertView(APIView):
                             content_type="application/json")
 
 
+class CustomDimensionViewSet(ModelViewSet):
+    """
+    Custom Dimensions API
+    """
+    queryset = CustomUnit.objects.all()
+    serializer_class = CustomUnitSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = CustomUnitFilter
+    pagination_class = PageNumberPagination
+    permission_classes = [CustomUnitObjectPermission,
+                          permissions.IsAuthenticated]
+    display_page_controls = True
+    lookup_url_param = 'system_name'
+
+    user = openapi.Parameter(
+        'user',
+        openapi.IN_QUERY,
+        description="Filter on user rates",
+        type=openapi.TYPE_BOOLEAN)
+    key = openapi.Parameter(
+        'key',
+        openapi.IN_QUERY,
+        description="Filter on user defined category",
+        type=openapi.TYPE_STRING)
+    unit_system = openapi.Parameter(
+        'unit_system',
+        openapi.IN_QUERY,
+        description="Filter on unit system",
+        type=openapi.TYPE_STRING)
+    code = openapi.Parameter(
+        'code',
+        openapi.IN_QUERY,
+        description="Filter on unit code",
+        type=openapi.TYPE_STRING)
+    name = openapi.Parameter(
+        'name',
+        openapi.IN_QUERY,
+        description="Filter on unit name",
+        type=openapi.TYPE_STRING)
+    relation = openapi.Parameter(
+        'relation',
+        openapi.IN_QUERY,
+        description="Filter on relation to base units",
+        type=openapi.TYPE_STRING)
+    ordering = openapi.Parameter(
+        'ordering',
+        openapi.IN_QUERY,
+        description="Sort on code, name, relation, symbol, alias. "
+                    "Prefix with - for descending sort",
+        type=openapi.TYPE_STRING)
+
+    def get_queryset(self):
+        """
+        Filter units based on authenticated user
+        """
+        qs = super().get_queryset()
+        system_name = self.kwargs.get(self.lookup_url_param, 'SI')
+        if self.request.user and self.request.user.is_authenticated:
+            qs = qs.filter(
+                models.Q(user=self.request.user) | models.Q(user__isnull=True)
+            )
+            if self.request.GET.get('key'):
+                qs = qs.filter(key=self.request.GET.get('key'))
+        else:
+            qs = qs.filter(models.Q(user__isnull=True))
+        qs = qs.filter(unit_system__iexact=system_name.lower())
+        return qs
+
+    @swagger_auto_schema(manual_parameters=[
+        user, key, unit_system, code, name, relation, ordering],
+        responses={200: CustomDimensionSerializer})
+    def list(self, request, *args, **kwargs):
+        """
+        List custom dimensions
+        """
+        return super().list(request, *args, **kwargs)
+
+    def create(self, request: HttpRequest, system_name: str, *args, **kwargs):
+        """
+        Create CustomDimension
+        """
+        cd_form = CustomDimensionForm(request.data)
+        if cd_form.is_valid():
+            cd = cd_form.save(commit=False)
+            try:
+                UnitSystem(
+                    system_name=system_name,
+                    user=request.user,
+                    key=cd.key)
+            except UnitSystemNotFound:
+                return Response("Invalid unit system",
+                                status=status.HTTP_400_BAD_REQUEST)
+            if request.user and request.user.is_authenticated:
+                if CustomDimension.objects.filter(
+                        code=cd.code,
+                        user=request.user,
+                        key=cd.key).exists():
+                    return Response("Custom unit already exists",
+                                    status=status.HTTP_409_CONFLICT)
+                cd.user = request.user
+                cd.unit_system = system_name
+                try:
+                    cd.save()
+                except (UnitValueError, ValueError) as e:
+                    return Response(str(e),
+                                    status=status.HTTP_400_BAD_REQUEST)
+                serializer = CustomDimensionSerializer(cd)
+                return Response(serializer.data,
+                                status=status.HTTP_201_CREATED)
+            else:
+                return HttpResponseForbidden()
+        else:
+            return Response(cd_form.errors,
+                            status=status.HTTP_400_BAD_REQUEST,
+                            content_type="application/json")
+
+
 class CustomUnitViewSet(ModelViewSet):
     """
     Custom Units API
@@ -437,7 +557,7 @@ class CustomUnitViewSet(ModelViewSet):
         """
         Filter units based on authenticated user
         """
-        qs = super(CustomUnitViewSet, self).get_queryset()
+        qs = super().get_queryset()
         system_name = self.kwargs.get(self.lookup_url_param, 'SI')
         if self.request.user and self.request.user.is_authenticated:
             qs = qs.filter(
@@ -455,7 +575,7 @@ class CustomUnitViewSet(ModelViewSet):
         responses={200: CustomUnitSerializer})
     def list(self, request, *args, **kwargs):
         """
-        List rates
+        List units
         """
         return super().list(request, *args, **kwargs)
 

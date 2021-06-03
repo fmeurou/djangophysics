@@ -24,3 +24,24 @@ class CustomUnitObjectPermission(permissions.BasePermission):
                 request.user == obj.user:
             return True
         return False
+
+
+class CustomDimensionObjectPermission(permissions.BasePermission):
+    """
+    Permissions for CustomDimension API
+    """
+
+    def has_object_permission(self, request, view, obj):
+        """
+        Limit creation and modification tu logged in users
+        """
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        if request.method == 'POST':
+            return True
+        elif request.method.lower() in ['put', 'patch', 'delete'] and \
+                request.user == obj.user:
+            return True
+        return False
