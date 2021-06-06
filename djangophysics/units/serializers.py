@@ -107,8 +107,7 @@ class DimensionSerializer(serializers.Serializer):
         label="Human readable name of the unit")
     dimension = serializers.CharField(
         label="Mathematical expression of the dimension")
-    base_unit = serializers.SerializerMethodField(
-        label="Name of the base unit")
+    base_unit = UnitSerializer(label="Name of the base unit")
 
     def create(self, validated_data):
         """
@@ -145,20 +144,15 @@ class DimensionWithUnitsSerializer(DimensionSerializer):
     Serialize a Dimension including associated units
     """
     units_per_dimension = None
-    units = UnitSerializer(label="Units of this dimension", many=True)
+    units = UnitSerializer(label="Units of this dimension",
+                                       many=True)
 
     @swagger_serializer_method(serializer_or_field=UnitSerializer)
     def get_units(self, obj: Dimension) -> [Unit]:
         """
         Get units for this dimension
         """
-
-        units_per_dimension = obj.unit_system.units_per_dimension()
-        try:
-            return units_per_dimension.get(obj.code, [])
-        except KeyError as e:
-            logging.error(str(e))
-            return []
+        return UnitSerializer(obj.units, many=True).data
 
 
 class UnitSystemSerializer(serializers.Serializer):

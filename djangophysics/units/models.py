@@ -1,7 +1,7 @@
 """
 Units models
 """
-
+import inspect
 import logging
 import re
 from datetime import date
@@ -69,6 +69,7 @@ class UnitSystem:
     system = None
     _additional_units = set()
     dimensions_cache = {}
+    units_cache = {}
     user = None
     key = None
     _additional_dimensions = set()
@@ -111,9 +112,8 @@ class UnitSystem:
                 self._load_custom_dimensions(user=user, key=key)
                 self._load_custom_units(user=user, key=key)
             self._rebuild_cache()
-            self.dimensions_cache = self.units_per_dimension()
-        except (FileNotFoundError, AttributeError):
-            raise UnitSystemNotFound("Invalid unit system")
+        except (FileNotFoundError, AttributeError) as e:
+            raise UnitSystemNotFound(f"Invalid unit system: {str(e)}")
 
     def _rebuild_cache(self):
         """
@@ -121,6 +121,9 @@ class UnitSystem:
         It should be in the define method of the registry
         """
         self.ureg._build_cache()
+        self.dimensions_cache = self.available_dimensions()
+        self.units_cache = self.available_units()
+
 
     def _load_additional_dimensions(
             self, dimensions: dict,
@@ -135,7 +138,7 @@ class UnitSystem:
             return False
         added_dimensions = []
         for key, items in dimensions[self.system_name].items():
-            if key not in available_dimensions:
+            if key not in available_dimensions.keys():
                 self.ureg.define(
                     f"{key} = {items['relation']}")
                 added_dimensions.append(key)
@@ -187,19 +190,21 @@ class UnitSystem:
                 qs = qs.filter(key=key)
         else:
             qs = CustomDimension.objects.filter(pk=-1)
-        qs = qs.filter(unit_system=self.system_name)
+        qs = qs.filter(
+            unit_system=self.system_name
+        ).select_related().values('code', 'relation')
         available_dimensions = self.available_dimension_names()
         added_dimensions = []
-        for cu in qs:
-            props = [cu.code, cu.relation]
+        for cd in qs:
+            props = [cd['code'], cd['relation']]
             definition = " = ".join(props)
-            if cu.code not in available_dimensions:
+            if cd not in available_dimensions:
                 self.ureg.define(definition)
-                added_dimensions.append(cu.code)
+                added_dimensions.append(cd['code'])
             elif redefine:
                 self.ureg.redefine(definition)
             else:
-                logging.error(f"{cu.code} already defined in registry")
+                logging.error(f"{cd['code']} already defined in registry")
         self._additional_dimensions = self._additional_dimensions | \
                                       set(added_dimensions)
         return True
@@ -222,23 +227,25 @@ class UnitSystem:
                 qs = qs.filter(key=key)
         else:
             qs = CustomUnit.objects.filter(pk=-1)
-        qs = qs.filter(unit_system=self.system_name)
+        qs = qs.filter(unit_system=self.system_name).values(
+            'code', 'relation', 'symbol', 'alias'
+        )
         available_units = self.available_unit_names()
         added_units = []
         for cu in qs:
-            props = [cu.code, cu.relation]
-            if cu.symbol:
-                props.append(cu.symbol)
-            if cu.alias:
-                props.append(cu.alias)
+            props = [cu['code'], cu['relation']]
+            if cu['symbol']:
+                props.append(cu['symbol'])
+            if cu['alias']:
+                props.append(cu['alias'])
             definition = " = ".join(props)
-            if cu.code not in available_units:
+            if cu['code'] not in available_units:
                 self.ureg.define(definition)
-                added_units.append(cu.code)
+                added_units.append(cu['code'])
             elif redefine:
                 self.ureg.redefine(definition)
             else:
-                logging.error(f"{cu.code} already defined in registry")
+                logging.error(f"{cu['code']} already defined in registry")
         self._additional_units = self._additional_units | set(added_units)
         return True
 
@@ -251,7 +258,7 @@ class UnitSystem:
         for key in units[self.system_name].keys():
             try:
                 self.unit(key).dimensionality and True
-            except pint.errors.UndefinedUnitError:
+            except (pint.errors.UndefinedUnitError, AttributeError):
                 return False
         return True
 
@@ -306,14 +313,21 @@ class UnitSystem:
         Create a Object in the UnitSystem
         :param unit_name: name of the unit in the unit system
         """
-        return Unit(unit_system=self, code=unit_name)
+        try:
+            return Unit(unit_system=self, code=unit_name)
+        except UnitNotFound:
+            return None
 
-    def available_dimension_names(self) -> [str]:
+    def available_dimension_names(self, search_term: str = None) -> [str]:
         """
         List of available units for a given Unit system
         :return: Array of names of Unit systems
         """
-        return list(self.ureg._dimensions.keys())
+        if search_term:
+            return [name for name in self.ureg._dimensions.keys()
+                     if search_term in name]
+        else:
+            return list(self.ureg._dimensions.keys())
 
     def available_unit_names(self) -> [str]:
         """
@@ -347,28 +361,44 @@ class UnitSystem:
             self,
             *arg,
             search_term: str = None,
-            ordering: str = 'name') -> {}:
+    ) -> {}:
         """
         Return available dimensions for the UnitSystem
         :param search_term: filter dimensions on name
-        :param ordering: sort result by attribute
         """
-        descending = False
-        if ordering and ordering[0] == '-':
-            ordering = ordering[1:]
-            descending = True
-        if ordering not in ['code', 'name', 'dimension']:
-            ordering = 'name'
-        if search_term:
-            dims = [Dimension(unit_system=self, code=dim)
-                    for dim in self.available_dimension_names()
-                    if search_term in dim]
+        dims = {}
+        if self.dimensions_cache:
+            dims = self.dimensions_cache
         else:
-            dims = [Dimension(unit_system=self, code=dim)
-                    for dim in self.available_dimension_names()]
-        return sorted(dims,
-                      key=lambda x: getattr(x, ordering, ''),
-                      reverse=descending)
+            for dim in self.available_dimension_names(search_term=search_term):
+                try:
+                    d = Dimension(
+                        unit_system=self,
+                        code=dim)
+                    if d:
+                        dims[dim] = d
+                except DimensionNotFound as e:
+                    logging.warning(f"dimension {dim} not found "
+                                    f"in unit system {self.system_name}")
+                    pass
+        if dims:
+            return dims
+        return dims
+
+    def available_units(self):
+        """
+        List available units
+        """
+        units = {}
+        if self.units_cache:
+            return self.units_cache
+        for unit_name in self.available_unit_names():
+            try:
+                u = self.unit(unit_name)
+                units[unit_name] = u
+            except UnitNotFound:
+                pass
+        return units
 
     @property
     def _ureg_dimensions(self):
@@ -396,27 +426,13 @@ class UnitSystem:
         except KeyError:
             return {}
 
-    def _generate_dimension_delta_dictionnary(self) -> {}:
-        """
-        Generate the dict to put in DIMENSIONS
-        """
-        output = {}
-        for dim in self._ureg_dimensions:
-            if dim not in DIMENSIONS:
-                output[dim] = {
-                    'name': f'_({dim})',
-                    'dimension': str(self._get_dimension_dimensionality(dim)),
-                    'symbol': ''
-                }
-        return output
-
     def units_per_dimension(self, dimensions: [str] = None) -> {}:
         """
         Return units grouped by dimension
         :param dimensions: restrict list of dimensions
         """
         output = {}
-        registry_dimensions = dimensions or DIMENSIONS.keys()
+        registry_dimensions = dimensions or self.available_dimension_names()
         for uname in self.available_unit_names():
             try:
                 u = self.unit(uname)
@@ -461,44 +477,62 @@ class Dimension:
     """
     unit_system = None
     code = None
-    name = None
+    _name = None
     dimension = None
 
-    def __init__(self, unit_system: UnitSystem, code: str):
+    def __init__(self,
+                 unit_system: UnitSystem,
+                 code: str):
         """
         Initialize a Dimension in a UnitSystem
         """
         self.unit_system = unit_system
         self.code = code
-        found = False
-        # Dimension is a dimension from settings
-        if code in DIMENSIONS:
-            dimension = DIMENSIONS[code]
-            self.name = dimension['name']
-            found = True
+        if code not in ['[compounded]', '[custom]'] and \
+            self.unit_system.dimensions_cache and \
+                code not in self.unit_system.dimensions_cache.keys():
+            raise DimensionNotFound(f"Dimension {code} not found")
+
+    @property
+    def name(self):
+        if self._name:
+            return self._name
         else:
-            try:
-                additional_dimensions_settings = settings.PHYSICS_ADDITIONAL_DIMENSIONS
-            except AttributeError:
-                additional_dimensions_settings = ADDITIONAL_DIMENSIONS
-            if code in additional_dimensions_settings.keys():
-                self.name = additional_dimensions_settings[code]['name']
-                found = True
+            code = self.code
+            name = code
+            if self.code in DIMENSIONS:
+                dimension = DIMENSIONS[code]
+                name = dimension['name']
             else:
                 try:
-                    cd = CustomDimension.objects.get(code=code)
-                    self.name = cd.name
-                    found = True
-                except CustomDimension.DoesNotExist:
-                    self.name = None
-        if not found:
-            raise DimensionNotFound
+                    additional_dimensions_settings = settings.PHYSICS_ADDITIONAL_DIMENSIONS
+                except AttributeError:
+                    additional_dimensions_settings = ADDITIONAL_DIMENSIONS
+                if code in additional_dimensions_settings.keys():
+                    name = additional_dimensions_settings[code]['name']
+                else:
+                    try:
+                        cd = CustomDimension.objects.get(code=code)
+                        name = cd.name
+                    except CustomDimension.DoesNotExist:
+                        pass
+            self._name = name
+            return name
+
+
 
     def __repr__(self):
         """
         Look beautiful
         """
         return self.code
+
+    @property
+    def pint_dimension(self):
+        """
+        Return the Pint dimension object
+        """
+        return self.unit_system.ureg._dimensions.get(self.code)
 
     def _prefixed_units(self, unit_names):
         """
@@ -519,6 +553,10 @@ class Dimension:
         return unit_list
 
     @property
+    def dimensionality(self):
+        return self.unit_system.ureg.get_dimensionality(self.code)
+
+    @property
     def units(self) -> [Unit]:
         """
         List of units for this dimension
@@ -531,49 +569,34 @@ class Dimension:
             return self._custom_units(
                 user=self.unit_system.user,
                 key=self.unit_system.key)
-        unit_list = []
-        if self.unit_system.system_name in UNIT_SYSTEM_BASE_AND_DERIVED_UNITS \
-                and self.code in UNIT_SYSTEM_BASE_AND_DERIVED_UNITS[
-            self.unit_system.system_name]:
+        unit_list = \
+            self.unit_system.ureg._cache.dimensional_equivalents.get(
+                self.dimensionality
+            ) or []
+        unit_names = []
+        for u in unit_list:
             try:
-                unit_list.append(
-                    self.unit_system.unit(
-                        UNIT_SYSTEM_BASE_AND_DERIVED_UNITS[
-                            self.unit_system.system_name][self.code]
-                    )
+                unit_names.append(
+                    Unit(unit_system=self.unit_system, code=u)
                 )
             except UnitNotFound:
-                logging.warning(
-                    f"Unit "
-                    f"{UNIT_SYSTEM_BASE_AND_DERIVED_UNITS[self.unit_system.system_name][self.code]}"
-                    f" not found in system {self.unit_system.system_name}")
-        try:
-            unit_list.extend(self.unit_system.dimensions_cache.get(
-                self.code, []
-            ))
-        except KeyError:
-            logging.warning(f"Cannot find compatible units "
-                            f"for this dimension {self.code}")
-        unit_names = [str(u) for u in unit_list]
+                logging.info(f"Unit {u} not found "
+                                f"on unit system "
+                                f"{self.unit_system.system_name}")
+                continue
         unit_names.extend(self._prefixed_units(unit_names))
-        return set(sorted(unit_list, key=lambda x: x.name))
+        return sorted(list(set(unit_names)), key=lambda x: x.name)
 
     @property
     def _compounded_units(self):
         """
         List units that do not belong to a dimension
         """
-        available_units = self.unit_system.available_unit_names()
-        dimensioned_units = []
-        for dimension_code in [d for d in DIMENSIONS.keys() if
-                               d != '[compounded]' and d != '[custom]']:
-            dimensioned_units.extend([c.code for c in
-                                      self.unit_system.dimensions_cache.get(
-                                          dimension_code,
-                                          []
-                                      )])
-        return [self.unit_system.unit(au)
-                for au in set(available_units) - set(dimensioned_units)]
+        compounded_units = []
+        for unit in self.unit_system.available_units().values():
+            if '[compounded]' in [d.code for d in unit.dimensions]:
+                compounded_units.append(unit)
+        return compounded_units
 
     def _custom_units(self, user: User, key: str = None) -> [Unit]:
         """
@@ -594,17 +617,17 @@ class Dimension:
             return []
 
     @property
-    def base_unit(self):
+    def base_unit(self) -> Unit:
         """
         Base unit for this dimension in this Unit System
         """
         try:
-            return UNIT_SYSTEM_BASE_AND_DERIVED_UNITS[
-                self.unit_system.system_name][self.code]
+            return self.unit_system.unit(UNIT_SYSTEM_BASE_AND_DERIVED_UNITS[
+                self.unit_system.system_name][self.code])
         except KeyError:
-            logging.warning(
-                f'dimension {self.dimension} is not part of '
-                f'unit system {self.unit_system.system_name}')
+            logging.info(
+                f'No base unit for dimension {self.code} '
+                f'in unit system {self.unit_system.system_name}')
             return None
 
 
@@ -615,12 +638,14 @@ class Unit:
     unit_system = None
     code = None
     unit = None
+    dimensions_cache = None
 
     def __init__(
             self,
             unit_system: UnitSystem,
             code: str = '',
-            pint_unit: pint.Unit = None):
+            pint_unit: pint.Unit = None
+    ):
         """
         Initialize a Unit in a UnitSystem
         :param unit_system: UnitSystem instance
@@ -634,8 +659,9 @@ class Unit:
             self.code = code
             try:
                 self.unit = getattr(unit_system.system, code)
+                self.dimensions_cache = self.dimensions
             except pint.errors.UndefinedUnitError:
-                raise UnitNotFound("invalid unit for system")
+                raise UnitNotFound(f"invalid unit {code} for system")
         else:
             raise UnitNotFound("invalid unit for system")
 
@@ -675,22 +701,24 @@ class Unit:
         """
         Return dimension codes for unit
         """
-        dimensions = [
-            code for code in
-            DIMENSIONS.keys()
-            if DIMENSIONS[code]['dimension'] == str(self.dimensionality)]
-        return dimensions or \
-               ['[compounded]', ]
+        return [d.code for d in self.dimensions]
 
     @property
     def dimensions(self) -> [Dimension]:
         """
         Return Dimensions of Unit
         """
-        return [
-            Dimension(unit_system=self.unit_system, code=code) for code in
-            self.dimension_codes
-        ]
+        if self.dimensions_cache:
+            return self.dimensions_cache
+        dimensions = []
+        for d in self.unit_system.available_dimensions().values():
+            if d.dimensionality == self.dimensionality:
+                dimensions.append(d)
+        if not dimensions:
+            return [Dimension(unit_system=self.unit_system,
+                             code='[compounded]'), ]
+        else:
+            return dimensions
 
     @staticmethod
     def base_unit(unit_str: str) -> (str, str):
@@ -763,7 +791,7 @@ class Unit:
         Return dimensionality of a unit in Pint universe
         """
         try:
-            return self.unit_system.ureg.get_base_units(self.code)[1]
+            return self.unit.dimensionality
         except KeyError:
             return ''
 
@@ -971,12 +999,15 @@ class CustomDimension(models.Model):
     unit_system = models.CharField(
         "Unit system to register the unit in", max_length=20,
         choices=AVAILABLE_SYSTEMS)
-    code = models.SlugField("technical name of the dimension (e.g.: myDimension)")
+    code = models.CharField(
+        "technical name of the dimension (e.g.: [myDimension])",
+        max_length=255)
     name = models.CharField(
         "Human readable name (e.g.: My dimension)",
         max_length=255)
     relation = models.CharField(
-        "Relation to existing dimensions (e.g.: [mass]*[length]/[time])", max_length=255)
+        "Relation to existing dimensions (e.g.: [mass]*[length]/[time])",
+        max_length=255)
 
     class Meta:
         """
@@ -985,7 +1016,7 @@ class CustomDimension(models.Model):
         unique_together = ('user', 'key', 'code')
         ordering = ['name', 'code']
 
-    def validate_dimensions(self):
+    def validate_dimensions(self) -> [bool, str]:
         """
         Validate dimensions of the relation
         """
@@ -998,29 +1029,36 @@ class CustomDimension(models.Model):
                 dim = Dimension(unit_system=us, code=dim_name)
                 dunits = dim.units
                 if dunits:
-                    dims[dim_name] = f"(1 * {dunits[0]}"
+                    dims[dim_name] = f"(1 * {dunits[0].code})"
             except DimensionNotFound:
-                return False
+                return False, f"Dimension not found {dim_name}"
         rel = self.relation
-        for key, value in dims:
+        for key, value in dims.items():
             rel = rel.replace(key, value)
         try:
-            us.ureg.Quantity(self.relation)
-        except pint.errors.UndefinedUnitError:
-            return False
+            us.ureg.Quantity(rel)
+        except pint.errors.UndefinedUnitError as e:
+            return False, f"Incoherent units {str(e)}"
+        return True, ""
 
     def save(self, *args, **kwargs):
         """
         Save custom unit to database
         """
-        us = UnitSystem(system_name=self.unit_system)
+        us = UnitSystem(
+            system_name=self.unit_system,
+            user=self.user,
+            key=self.key
+        )
         self.code = self.code.replace('-', '_')
         if self.code[0] != '[':
             self.code = '[' + self.code
         if self.code[-1] != ']':
             self.code = self.code + ']'
+        if self.relation in us.available_dimension_names():
+            raise DimensionDuplicateError("relation already exist")
         if self.code in us.available_dimension_names():
-            raise DimensionDuplicateError
+            raise DimensionDuplicateError("Dimension code already exists")
         try:
             us.add_dimension(
                 code=self.code,
@@ -1028,8 +1066,9 @@ class CustomDimension(models.Model):
             )
         except ValueError as e:
             raise DimensionValueError(str(e)) from e
-        if not self.validate_dimensions():
-            raise DimensionDimensionError
+        is_valid, error = self.validate_dimensions()
+        if not is_valid:
+            raise DimensionDimensionError(error)
         return super().save(*args, **kwargs)
 
 
@@ -1082,8 +1121,10 @@ class CustomUnit(models.Model):
         """
         us = UnitSystem(system_name=self.unit_system)
         self.code = self.code.replace('-', '_')
-        self.symbol = self.symbol.replace('-', '_')
-        self.alias = self.alias.replace('-', '_')
+        if self.symbol:
+            self.symbol = self.symbol.replace('-', '_')
+        if self.alias:
+            self.alias = self.alias.replace('-', '_')
         if self.code in us.available_unit_names():
             raise UnitDuplicateError
         try:
@@ -1096,8 +1137,8 @@ class CustomUnit(models.Model):
             raise UnitValueError(str(e)) from e
         try:
             us.unit(self.code).unit.dimensionality
-        except pint.errors.UndefinedUnitError:
-            raise UnitDimensionError
+        except (pint.errors.UndefinedUnitError, AttributeError) as e:
+            raise UnitDimensionError(str(e))
         return super().save(*args, **kwargs)
 
 

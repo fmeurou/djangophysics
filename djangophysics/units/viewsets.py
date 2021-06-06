@@ -26,7 +26,7 @@ from djangophysics.core.pagination import PageNumberPagination
 from . import DIMENSIONS
 from .exceptions import UnitConverterInitError, UnitSystemNotFound, \
     UnitNotFound, DimensionNotFound, UnitValueError
-from .filters import CustomUnitFilter
+from .filters import CustomUnitFilter, CustomDimensionFilter
 from .forms import CustomUnitForm, CustomDimensionForm
 from .models import UnitSystem, UnitConverter, Dimension, CustomUnit, \
     CustomDimension
@@ -51,6 +51,10 @@ class UnitSystemViewset(ViewSet):
     language = openapi.Parameter(
         'language', openapi.IN_QUERY,
         description="language",
+        type=openapi.TYPE_STRING)
+    key = openapi.Parameter(
+        'user custom key', openapi.IN_QUERY,
+        description="key",
         type=openapi.TYPE_STRING)
 
     unit_systems_response = openapi.Response(
@@ -106,10 +110,9 @@ class UnitSystemViewset(ViewSet):
             return Response("Unknown unit system: " + str(e),
                             status=HTTP_404_NOT_FOUND)
 
-    @method_decorator(cache_page(60 * 60 * 24))
     @method_decorator(vary_on_cookie)
     @swagger_auto_schema(
-        manual_parameters=[language, language_header, ordering],
+        manual_parameters=[language, language_header, key, ordering],
         responses={200: DimensionSerializer})
     @action(methods=['GET'], detail=True,
             name='dimensions', url_path='dimensions')
@@ -117,13 +120,31 @@ class UnitSystemViewset(ViewSet):
         """
         List Dimensions of a UnitSystem
         """
+        key = request.GET.get('key')
         language = validate_language(request.GET.get('language',
                                                      request.LANGUAGE_CODE))
         ordering = request.GET.get('ordering', 'name')
+        descending = False
+        if ordering and ordering[0] == '-':
+            ordering = ordering[1:]
+            descending = True
+        if ordering not in ['code', 'name']:
+            ordering = 'name'
         try:
-            us = UnitSystem(system_name=system_name, fmt_locale=language)
-            serializer = DimensionSerializer(us.available_dimensions(
-                ordering=ordering),
+            if request.user and request.user.is_authenticated:
+                us = UnitSystem(
+                    system_name=system_name,
+                    user=request.user,
+                    key=key,
+                    fmt_locale=language)
+            else:
+                us = UnitSystem(
+                    system_name=system_name,
+                    fmt_locale=language)
+            serializer = DimensionSerializer(
+                sorted(us.available_dimensions().values(),
+                       key=lambda x: getattr(x, ordering),
+                       reverse=descending),
                 many=True,
                 context={'request': request})
             return Response(serializer.data, content_type="application/json")
@@ -255,7 +276,6 @@ class UnitViewset(ViewSet):
             return Response('Invalid Unit System',
                             status=status.HTTP_404_NOT_FOUND)
 
-    @method_decorator(cache_page(60 * 60 * 24))
     @method_decorator(vary_on_cookie)
     @swagger_auto_schema(manual_parameters=[key, language, language_header],
                          responses={200: unit_response})
@@ -276,6 +296,8 @@ class UnitViewset(ViewSet):
                 user=user,
                 key=key)
             unit = us.unit(unit_name=unit_name)
+            if not unit:
+                return Response("Unknown unit", status=HTTP_404_NOT_FOUND)
             serializer = UnitSerializer(unit, context={'request': request})
             return Response(serializer.data, content_type="application/json")
         except (UnitSystemNotFound, UnitNotFound):
@@ -293,8 +315,10 @@ class UnitViewset(ViewSet):
         """
         List compatible Units
         """
-        language = validate_language(request.GET.get('language',
-                                                     request.LANGUAGE_CODE))
+        language = validate_language(request.GET.get(
+            'language',
+            request.LANGUAGE_CODE)
+        )
         ordering = request.GET.get('ordering', 'name')
         descending = False
         if ordering and ordering[0] == '-':
@@ -379,12 +403,12 @@ class CustomDimensionViewSet(ModelViewSet):
     """
     Custom Dimensions API
     """
-    queryset = CustomUnit.objects.all()
-    serializer_class = CustomUnitSerializer
+    queryset = CustomDimension.objects.all()
+    serializer_class = CustomDimensionSerializer
     filter_backends = (filters.DjangoFilterBackend,)
-    filterset_class = CustomUnitFilter
+    filterset_class = CustomDimensionFilter
     pagination_class = PageNumberPagination
-    permission_classes = [CustomUnitObjectPermission,
+    permission_classes = [CustomDimensionObjectPermission,
                           permissions.IsAuthenticated]
     display_page_controls = True
     lookup_url_param = 'system_name'
@@ -432,14 +456,17 @@ class CustomDimensionViewSet(ModelViewSet):
         """
         qs = super().get_queryset()
         system_name = self.kwargs.get(self.lookup_url_param, 'SI')
+        no_user_filter = models.Q(user__isnull=True)
         if self.request.user and self.request.user.is_authenticated:
-            qs = qs.filter(
-                models.Q(user=self.request.user) | models.Q(user__isnull=True)
-            )
-            if self.request.GET.get('key'):
-                qs = qs.filter(key=self.request.GET.get('key'))
+            key = self.request.GET.get('key')
+            if key:
+                key_filter = models.Q(key=self.request.GET.get('key'))
+                user_filter = models.Q(user=self.request.user) & key_filter
+            else:
+                user_filter = models.Q(user=self.request.user)
+            qs = qs.filter(user_filter | no_user_filter)
         else:
-            qs = qs.filter(models.Q(user__isnull=True))
+            qs = qs.filter(no_user_filter)
         qs = qs.filter(unit_system__iexact=system_name.lower())
         return qs
 
@@ -559,12 +586,15 @@ class CustomUnitViewSet(ModelViewSet):
         """
         qs = super().get_queryset()
         system_name = self.kwargs.get(self.lookup_url_param, 'SI')
+        no_user_filter = models.Q(user__isnull=True)
         if self.request.user and self.request.user.is_authenticated:
-            qs = qs.filter(
-                models.Q(user=self.request.user) | models.Q(user__isnull=True)
-            )
-            if self.request.GET.get('key'):
-                qs = qs.filter(key=self.request.GET.get('key'))
+            key = self.request.GET.get('key')
+            if key:
+                key_filter = models.Q(key=self.request.GET.get('key'))
+                user_filter = models.Q(user=self.request.user) & key_filter
+            else:
+                user_filter = models.Q(user=self.request.user)
+            qs = qs.filter(user_filter | no_user_filter)
         else:
             qs = qs.filter(models.Q(user__isnull=True))
         qs = qs.filter(unit_system__iexact=system_name.lower())

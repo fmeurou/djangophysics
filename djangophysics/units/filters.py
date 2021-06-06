@@ -6,7 +6,7 @@ from django.db import models
 from django.db.models import QuerySet
 from django_filters import rest_framework as filters
 
-from .models import CustomUnit
+from .models import CustomUnit, CustomDimension
 
 
 class CustomUnitFilter(filters.FilterSet):
@@ -138,7 +138,7 @@ class CustomDimensionFilter(filters.FilterSet):
         """
         Meta
         """
-        model = CustomUnit
+        model = CustomDimension
         fields = [
             'user', 'key',
             'unit_system', 'code', 'name',
