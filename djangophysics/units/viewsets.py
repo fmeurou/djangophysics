@@ -264,8 +264,7 @@ class UnitViewset(ViewSet):
                 fmt_locale=language,
                 user=user,
                 key=key)
-            dimensions = [Dimension(unit_system=us, code=code)
-                          for code in DIMENSIONS.keys()]
+            dimensions = us.dimensions_cache.values()
             serializer = DimensionWithUnitsSerializer(
                 dimensions,
                 many=True,
@@ -615,6 +614,7 @@ class CustomUnitViewSet(ModelViewSet):
         """
         cu_form = CustomUnitForm(request.data)
         if cu_form.is_valid():
+            dim_name = request.data.get('dimension')
             cu = cu_form.save(commit=False)
             try:
                 UnitSystem(
@@ -638,6 +638,36 @@ class CustomUnitViewSet(ModelViewSet):
                 except (UnitValueError, ValueError) as e:
                     return Response(str(e),
                                     status=status.HTTP_400_BAD_REQUEST)
+                us = UnitSystem(
+                    system_name=system_name,
+                    user=request.user,
+                    key=cu.key
+                )
+                if dim_name:
+                    if dim_name in us.available_dimension_names():
+                        try:
+                            dim = Dimension(unit_system=us, code=dim_name)
+                            if cu.code not in [u.code for u in dim.units]:
+                                return Response(
+                                    "Incoherent unit and dimension",
+                                    status=status.HTTP_400_BAD_REQUEST
+                                )
+                        except DimensionNotFound:
+                            cu.delete()
+                            return Response(
+                                "Invalid dimension",
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                    else:
+                        unit = us.unit(cu.code)
+                        CustomDimension.objects.create(
+                            unit_system=system_name,
+                            user=request.user,
+                            key=cu.key,
+                            name=dim_name,
+                            code=dim_name,
+                            relation=str(unit.dimensionality)
+                        )
                 serializer = CustomUnitSerializer(cu)
                 return Response(serializer.data,
                                 status=status.HTTP_201_CREATED)
