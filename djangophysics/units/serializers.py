@@ -107,8 +107,7 @@ class DimensionSerializer(serializers.Serializer):
         label="Human readable name of the unit")
     dimension = serializers.CharField(
         label="Mathematical expression of the dimension")
-    base_unit = serializers.SerializerMethodField(
-        label="Name of the base unit")
+    base_unit = UnitSerializer(label="Name of the base unit")
 
     def create(self, validated_data):
         """
@@ -145,20 +144,15 @@ class DimensionWithUnitsSerializer(DimensionSerializer):
     Serialize a Dimension including associated units
     """
     units_per_dimension = None
-    units = UnitSerializer(label="Units of this dimension", many=True)
+    units = serializers.SerializerMethodField(
+        label="Units of this dimension")
 
     @swagger_serializer_method(serializer_or_field=UnitSerializer)
     def get_units(self, obj: Dimension) -> [Unit]:
         """
         Get units for this dimension
         """
-
-        units_per_dimension = obj.unit_system.units_per_dimension()
-        try:
-            return units_per_dimension.get(obj.code, [])
-        except KeyError as e:
-            logging.error(str(e))
-            return []
+        return UnitSerializer(obj.units, many=True).data
 
 
 class UnitSystemSerializer(serializers.Serializer):
@@ -270,6 +264,13 @@ class CustomUnitSerializer(serializers.ModelSerializer):
     unit_system = serializers.CharField(
         label="Unit system of the unit",
         read_only=True)
+    dimension = serializers.CharField(
+        label="Optional dimension. Will create a new dimension "
+              "with the given name if it doesn't exist. "
+              "Will check the dimensionality of the unit "
+              "against the dimensionality of the dimension if it exists.",
+        required=False
+    )
 
     class Meta:
         """
@@ -285,4 +286,38 @@ class CustomUnitSerializer(serializers.ModelSerializer):
             'name',
             'relation',
             'symbol',
-            'alias']
+            'alias',
+            'dimension'
+        ]
+
+
+class CustomDimensionSerializer(serializers.ModelSerializer):
+    """
+    Serialize a custom dimension
+    """
+    id = serializers.CharField(
+        label="ID of the CustomUnit",
+        read_only=True)
+    user = UserSerializer(
+        label="Owner of the unit",
+        read_only=True)
+    unit_system = serializers.CharField(
+        label="Unit system of the unit",
+        read_only=True)
+
+    class Meta:
+        """
+        Meta
+        """
+        model = CustomUnit
+        fields = [
+            'id',
+            'user',
+            'key',
+            'unit_system',
+            'code',
+            'name',
+            'relation']
+        read_only_fields = [
+            'id',
+        ]

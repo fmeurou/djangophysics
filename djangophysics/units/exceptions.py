@@ -17,6 +17,27 @@ class DimensionNotFound(Exception):
     message = "Dimension not found in the registry"
 
 
+class DimensionDuplicateError(Exception):
+    """
+    Error duplicating dimension
+    """
+    message = "Dimension with the same code already exists in the registry"
+
+
+class DimensionValueError(Exception):
+    """
+    Error creating dimension
+    """
+    message = "Dimension values are inconsistent"
+
+
+class DimensionDimensionError(Exception):
+    """
+    Invalid dimension for the unit system
+    """
+    message = "Dimenison dimensionality is not valid for the registry"
+
+
 class UnitNotFound(Exception):
     """
     Unit not found exception

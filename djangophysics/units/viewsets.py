@@ -26,13 +26,16 @@ from djangophysics.core.pagination import PageNumberPagination
 from . import DIMENSIONS
 from .exceptions import UnitConverterInitError, UnitSystemNotFound, \
     UnitNotFound, DimensionNotFound, UnitValueError
-from .filters import CustomUnitFilter
-from .forms import CustomUnitForm
-from .models import UnitSystem, UnitConverter, Dimension, CustomUnit
-from .permissions import CustomUnitObjectPermission
+from .filters import CustomUnitFilter, CustomDimensionFilter
+from .forms import CustomUnitForm, CustomDimensionForm
+from .models import UnitSystem, UnitConverter, Dimension, CustomUnit, \
+    CustomDimension
+from .permissions import CustomUnitObjectPermission, \
+    CustomDimensionObjectPermission
 from .serializers import UnitSerializer, UnitSystemSerializer, \
     UnitConversionPayloadSerializer, DimensionSerializer, \
-    DimensionWithUnitsSerializer, CustomUnitSerializer
+    DimensionWithUnitsSerializer, CustomUnitSerializer, \
+    CustomDimensionSerializer
 
 
 class UnitSystemViewset(ViewSet):
@@ -48,6 +51,10 @@ class UnitSystemViewset(ViewSet):
     language = openapi.Parameter(
         'language', openapi.IN_QUERY,
         description="language",
+        type=openapi.TYPE_STRING)
+    key = openapi.Parameter(
+        'user custom key', openapi.IN_QUERY,
+        description="key",
         type=openapi.TYPE_STRING)
 
     unit_systems_response = openapi.Response(
@@ -103,10 +110,9 @@ class UnitSystemViewset(ViewSet):
             return Response("Unknown unit system: " + str(e),
                             status=HTTP_404_NOT_FOUND)
 
-    @method_decorator(cache_page(60 * 60 * 24))
     @method_decorator(vary_on_cookie)
     @swagger_auto_schema(
-        manual_parameters=[language, language_header, ordering],
+        manual_parameters=[language, language_header, key, ordering],
         responses={200: DimensionSerializer})
     @action(methods=['GET'], detail=True,
             name='dimensions', url_path='dimensions')
@@ -114,13 +120,31 @@ class UnitSystemViewset(ViewSet):
         """
         List Dimensions of a UnitSystem
         """
+        key = request.GET.get('key')
         language = validate_language(request.GET.get('language',
                                                      request.LANGUAGE_CODE))
         ordering = request.GET.get('ordering', 'name')
+        descending = False
+        if ordering and ordering[0] == '-':
+            ordering = ordering[1:]
+            descending = True
+        if ordering not in ['code', 'name']:
+            ordering = 'name'
         try:
-            us = UnitSystem(system_name=system_name, fmt_locale=language)
-            serializer = DimensionSerializer(us.available_dimensions(
-                ordering=ordering),
+            if request.user and request.user.is_authenticated:
+                us = UnitSystem(
+                    system_name=system_name,
+                    user=request.user,
+                    key=key,
+                    fmt_locale=language)
+            else:
+                us = UnitSystem(
+                    system_name=system_name,
+                    fmt_locale=language)
+            serializer = DimensionSerializer(
+                sorted(us.available_dimensions().values(),
+                       key=lambda x: getattr(x, ordering),
+                       reverse=descending),
                 many=True,
                 context={'request': request})
             return Response(serializer.data, content_type="application/json")
@@ -240,8 +264,7 @@ class UnitViewset(ViewSet):
                 fmt_locale=language,
                 user=user,
                 key=key)
-            dimensions = [Dimension(unit_system=us, code=code)
-                          for code in DIMENSIONS.keys()]
+            dimensions = us.dimensions_cache.values()
             serializer = DimensionWithUnitsSerializer(
                 dimensions,
                 many=True,
@@ -252,7 +275,6 @@ class UnitViewset(ViewSet):
             return Response('Invalid Unit System',
                             status=status.HTTP_404_NOT_FOUND)
 
-    @method_decorator(cache_page(60 * 60 * 24))
     @method_decorator(vary_on_cookie)
     @swagger_auto_schema(manual_parameters=[key, language, language_header],
                          responses={200: unit_response})
@@ -273,6 +295,8 @@ class UnitViewset(ViewSet):
                 user=user,
                 key=key)
             unit = us.unit(unit_name=unit_name)
+            if not unit:
+                return Response("Unknown unit", status=HTTP_404_NOT_FOUND)
             serializer = UnitSerializer(unit, context={'request': request})
             return Response(serializer.data, content_type="application/json")
         except (UnitSystemNotFound, UnitNotFound):
@@ -290,8 +314,10 @@ class UnitViewset(ViewSet):
         """
         List compatible Units
         """
-        language = validate_language(request.GET.get('language',
-                                                     request.LANGUAGE_CODE))
+        language = validate_language(request.GET.get(
+            'language',
+            request.LANGUAGE_CODE)
+        )
         ordering = request.GET.get('ordering', 'name')
         descending = False
         if ordering and ordering[0] == '-':
@@ -372,6 +398,126 @@ class ConvertView(APIView):
                             content_type="application/json")
 
 
+class CustomDimensionViewSet(ModelViewSet):
+    """
+    Custom Dimensions API
+    """
+    queryset = CustomDimension.objects.all()
+    serializer_class = CustomDimensionSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = CustomDimensionFilter
+    pagination_class = PageNumberPagination
+    permission_classes = [CustomDimensionObjectPermission,
+                          permissions.IsAuthenticated]
+    display_page_controls = True
+    lookup_url_param = 'system_name'
+
+    user = openapi.Parameter(
+        'user',
+        openapi.IN_QUERY,
+        description="Filter on user rates",
+        type=openapi.TYPE_BOOLEAN)
+    key = openapi.Parameter(
+        'key',
+        openapi.IN_QUERY,
+        description="Filter on user defined category",
+        type=openapi.TYPE_STRING)
+    unit_system = openapi.Parameter(
+        'unit_system',
+        openapi.IN_QUERY,
+        description="Filter on unit system",
+        type=openapi.TYPE_STRING)
+    code = openapi.Parameter(
+        'code',
+        openapi.IN_QUERY,
+        description="Filter on unit code",
+        type=openapi.TYPE_STRING)
+    name = openapi.Parameter(
+        'name',
+        openapi.IN_QUERY,
+        description="Filter on unit name",
+        type=openapi.TYPE_STRING)
+    relation = openapi.Parameter(
+        'relation',
+        openapi.IN_QUERY,
+        description="Filter on relation to base units",
+        type=openapi.TYPE_STRING)
+    ordering = openapi.Parameter(
+        'ordering',
+        openapi.IN_QUERY,
+        description="Sort on code, name, relation, symbol, alias. "
+                    "Prefix with - for descending sort",
+        type=openapi.TYPE_STRING)
+
+    def get_queryset(self):
+        """
+        Filter units based on authenticated user
+        """
+        qs = super().get_queryset()
+        system_name = self.kwargs.get(self.lookup_url_param, 'SI')
+        no_user_filter = models.Q(user__isnull=True)
+        if self.request.user and self.request.user.is_authenticated:
+            key = self.request.GET.get('key')
+            if key:
+                key_filter = models.Q(key=self.request.GET.get('key'))
+                user_filter = models.Q(user=self.request.user) & key_filter
+            else:
+                user_filter = models.Q(user=self.request.user)
+            qs = qs.filter(user_filter | no_user_filter)
+        else:
+            qs = qs.filter(no_user_filter)
+        qs = qs.filter(unit_system__iexact=system_name.lower())
+        return qs
+
+    @swagger_auto_schema(manual_parameters=[
+        user, key, unit_system, code, name, relation, ordering],
+        responses={200: CustomDimensionSerializer})
+    def list(self, request, *args, **kwargs):
+        """
+        List custom dimensions
+        """
+        return super().list(request, *args, **kwargs)
+
+    def create(self, request: HttpRequest, system_name: str, *args, **kwargs):
+        """
+        Create CustomDimension
+        """
+        cd_form = CustomDimensionForm(request.data)
+        if cd_form.is_valid():
+            cd = cd_form.save(commit=False)
+            try:
+                UnitSystem(
+                    system_name=system_name,
+                    user=request.user,
+                    key=cd.key)
+            except UnitSystemNotFound:
+                return Response("Invalid unit system",
+                                status=status.HTTP_400_BAD_REQUEST)
+            if request.user and request.user.is_authenticated:
+                if CustomDimension.objects.filter(
+                        code=cd.code,
+                        user=request.user,
+                        key=cd.key).exists():
+                    return Response("Custom unit already exists",
+                                    status=status.HTTP_409_CONFLICT)
+                cd.user = request.user
+                cd.unit_system = system_name
+                try:
+                    cd.save()
+                except (UnitValueError, ValueError) as e:
+                    return Response(str(e),
+                                    status=status.HTTP_400_BAD_REQUEST)
+                serializer = CustomDimensionSerializer(cd)
+                return Response(serializer.data,
+                                status=status.HTTP_201_CREATED)
+            else:
+                return HttpResponseForbidden()
+        else:
+            return Response(cd_form.errors,
+                            status=status.HTTP_400_BAD_REQUEST,
+                            content_type="application/json")
+
+
 class CustomUnitViewSet(ModelViewSet):
     """
     Custom Units API
@@ -437,14 +583,17 @@ class CustomUnitViewSet(ModelViewSet):
         """
         Filter units based on authenticated user
         """
-        qs = super(CustomUnitViewSet, self).get_queryset()
+        qs = super().get_queryset()
         system_name = self.kwargs.get(self.lookup_url_param, 'SI')
+        no_user_filter = models.Q(user__isnull=True)
         if self.request.user and self.request.user.is_authenticated:
-            qs = qs.filter(
-                models.Q(user=self.request.user) | models.Q(user__isnull=True)
-            )
-            if self.request.GET.get('key'):
-                qs = qs.filter(key=self.request.GET.get('key'))
+            key = self.request.GET.get('key')
+            if key:
+                key_filter = models.Q(key=self.request.GET.get('key'))
+                user_filter = models.Q(user=self.request.user) & key_filter
+            else:
+                user_filter = models.Q(user=self.request.user)
+            qs = qs.filter(user_filter | no_user_filter)
         else:
             qs = qs.filter(models.Q(user__isnull=True))
         qs = qs.filter(unit_system__iexact=system_name.lower())
@@ -455,7 +604,7 @@ class CustomUnitViewSet(ModelViewSet):
         responses={200: CustomUnitSerializer})
     def list(self, request, *args, **kwargs):
         """
-        List rates
+        List units
         """
         return super().list(request, *args, **kwargs)
 
@@ -465,6 +614,7 @@ class CustomUnitViewSet(ModelViewSet):
         """
         cu_form = CustomUnitForm(request.data)
         if cu_form.is_valid():
+            dim_name = request.data.get('dimension')
             cu = cu_form.save(commit=False)
             try:
                 UnitSystem(
@@ -488,6 +638,36 @@ class CustomUnitViewSet(ModelViewSet):
                 except (UnitValueError, ValueError) as e:
                     return Response(str(e),
                                     status=status.HTTP_400_BAD_REQUEST)
+                us = UnitSystem(
+                    system_name=system_name,
+                    user=request.user,
+                    key=cu.key
+                )
+                if dim_name:
+                    if dim_name in us.available_dimension_names():
+                        try:
+                            dim = Dimension(unit_system=us, code=dim_name)
+                            if cu.code not in [u.code for u in dim.units]:
+                                return Response(
+                                    "Incoherent unit and dimension",
+                                    status=status.HTTP_400_BAD_REQUEST
+                                )
+                        except DimensionNotFound:
+                            cu.delete()
+                            return Response(
+                                "Invalid dimension",
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                    else:
+                        unit = us.unit(cu.code)
+                        CustomDimension.objects.create(
+                            unit_system=system_name,
+                            user=request.user,
+                            key=cu.key,
+                            name=dim_name,
+                            code=dim_name,
+                            relation=str(unit.dimensionality)
+                        )
                 serializer = CustomUnitSerializer(cu)
                 return Response(serializer.data,
                                 status=status.HTTP_201_CREATED)

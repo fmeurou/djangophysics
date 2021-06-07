@@ -7,7 +7,7 @@ from django.urls import path
 from rest_framework import routers
 
 from .viewsets import UnitSystemViewset, UnitViewset, \
-    ConvertView, CustomUnitViewSet
+    ConvertView, CustomUnitViewSet, CustomDimensionViewSet
 from djangophysics.calculations.viewsets import ValidateViewSet, CalculationView
 
 app_name = 'units'
@@ -18,6 +18,10 @@ router.register(r'(?P<system_name>\w+)/units',
                 UnitViewset, basename='units')
 router.register(r'(?P<system_name>\w+)/custom',
                 CustomUnitViewSet, basename='custom')
+router.register(r'(?P<system_name>\w+)/units/custom',
+                CustomUnitViewSet, basename='custom_units')
+router.register(r'(?P<system_name>\w+)/dimensions/custom',
+                CustomDimensionViewSet, basename='custom_dimensions')
 
 urlpatterns = [
     path('convert/', ConvertView.as_view()),
