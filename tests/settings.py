@@ -367,7 +367,7 @@ from djangophysics.units.settings import *
 
 PHYSICS_ADDITIONAL_DIMENSIONS = {
     '[hello_world]': {
-        'name': _('massic heating value'),
+        'name': 'massic heating value',
         'relation': '[energy]/[mass]'
     }
 }
