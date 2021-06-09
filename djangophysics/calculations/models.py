@@ -66,9 +66,11 @@ class Operand:
         Transform unit if unit is a dimension
         """
         # Find dimensions
-        exp = r'(?P<dim>\[\w+\])'
+        exp = r'(?P<dim>\[(?:\w+)*\])'
         replace_dict = {}
         for dimension_name in re.findall(exp, self.unit):
+            if dimension_name == '[dimensionless]' or dimension_name == '[]':
+                return ''
             try:
                 dim = Dimension(unit_system=unit_system, code=dimension_name)
                 replace_dict[dimension_name] = str(dim.units.pop())
