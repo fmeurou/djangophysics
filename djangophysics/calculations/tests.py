@@ -371,6 +371,73 @@ class ExpressionAPITest(TestCase):
                                  {'code': '[time]', 'multiplicity': 1.0}],
                                 key=lambda x: x['code']))
 
+    def test_formula_dimension_validation_request(self):
+        """
+        Test formula syntax validation
+        """
+        client = APIClient()
+        response = client.post(
+            '/units/SI/formulas/validate/',
+            data=json.dumps({
+                'expression': '(3*{a}*15*{b})*6*{c}',
+                'operands': [
+                    {
+                        'name': 'a',
+                        'value': 0.1,
+                        'unit': '[length]/[time]'
+                    },
+                    {
+                        'name': 'b',
+                        'value': 15,
+                        'unit': 'g/km*hour'
+                    },
+                    {
+                        'name': 'c',
+                        'value': 12,
+                        'unit': 's*[temperature]'
+                    }
+                ]
+            }),
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(sorted(json.loads(response.content), key=lambda x: x['code']),
+                         sorted([{'code': '[mass]', 'multiplicity': 1.0},
+                                 {'code': '[temperature]', 'multiplicity': 1.0},
+                                 {'code': '[time]', 'multiplicity': 1.0}],
+                                key=lambda x: x['code']))
+
+    def test_formula_dimension_validation_invalid_syntax_request(self):
+        """
+        Test formula syntax validation
+        """
+        client = APIClient()
+        response = client.post(
+            '/units/SI/formulas/validate/',
+            data=json.dumps({
+                'expression': '(3*{a}*15*{b})*6*{c}',
+                'operands': [
+                    {
+                        'name': 'a',
+                        'value': 0.1,
+                        'unit': '[length]/[time]'
+                    },
+                    {
+                        'name': 'b',
+                        'value': 15,
+                        'unit': 'g/km*hour'
+                    },
+                    {
+                        'name': 'c',
+                        'value': 12,
+                        'unit': 's*[temperature]]'
+                    }
+                ]
+            }),
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_406_NOT_ACCEPTABLE)
+
     def test_formula_validation_out_units_request(self):
         """
         Test formula output dimensions validation

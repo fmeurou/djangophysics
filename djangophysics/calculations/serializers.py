@@ -2,6 +2,7 @@
 Serializers for Calculations module
 """
 import json
+from tokenize import TokenError
 
 import pint
 from rest_framework import serializers
@@ -106,6 +107,21 @@ class ExpressionSerializer(serializers.Serializer):
         """
         list_serializer_class = ExpressionListSerializer
 
+    def operands_obj(self, operands: [dict]):
+        return [
+            Operand(
+                name=v['name'],
+                value=v['value'],
+                unit=v['unit'])
+            for v in operands]
+
+    def expr_args(self, unit_system: UnitSystem, operands: [Operand]):
+        """
+        Build expression arguments to pass to format or expression validation
+        """
+        return {v.name: v.expr(unit_system=unit_system)
+                for v in operands}
+
     def is_valid(self, unit_system: UnitSystem,
                  raise_exception=False,
                  dimensions_only=False) -> bool:
@@ -120,6 +136,7 @@ class ExpressionSerializer(serializers.Serializer):
             operands=self.initial_data.get('operands')
         )
         expression = self.expression_validation(
+            unit_system=unit_system,
             expression=self.initial_data.get('expression'),
             operands=operands
         )
@@ -158,12 +175,10 @@ class ExpressionSerializer(serializers.Serializer):
         :param operands: list of Operand objects
         :param out_units: optional conversion to specific units
         """
-        # Validate units
-        q_ = unit_system.ureg.Quantity
         try:
-            units_kwargs = {
-                v['name']: q_(v['value'], v['unit'])
-                for v in operands}
+            units_kwargs = self.expr_args(
+                unit_system=unit_system,
+                operands=self.operands_obj(operands=operands))
             result = unit_system.ureg.parse_expression(
                 expression, **units_kwargs)
         except KeyError:
@@ -174,6 +189,9 @@ class ExpressionSerializer(serializers.Serializer):
             return False
         except pint.errors.DimensionalityError:
             self._errors['expression'] = "Incoherent dimension"
+            return False
+        except TokenError:
+            self._errors['expression'] = "Invalid expression"
             return False
         if out_units:
             try:
@@ -196,35 +214,38 @@ class ExpressionSerializer(serializers.Serializer):
         :param out_units: optional conversion to specific units
         """
         q_ = unit_system.ureg.Quantity
-        operand_objs = [
-            Operand(
-                name=v['name'],
-                value=v['value'],
-                unit=v['unit'])
-            for v in operands]
-        units_kwargs = {v.name: f"{v.value} {v.get_unit(unit_system)}"
-                        for v in operand_objs}
+        units_kwargs = self.expr_args(
+            unit_system=unit_system,
+            operands=self.operands_obj(operands=operands))
         try:
             result = q_(expression.format(**units_kwargs))
         except KeyError:
             self._errors['operands'] = "Missing operands"
             return False
         except (pint.errors.DimensionalityError,
-                pint.errors.UndefinedUnitError):
-            self._errors['expression'] = "Incoherent dimension"
+                pint.errors.UndefinedUnitError) as e:
+            self._errors['expression'] = f"Incoherent dimension {str(e)}"
+            return False
+        except TokenError:
+            self._errors['expression'] = "Invalid expression"
             return False
         if out_units:
             try:
                 result.to(out_units)
             except (pint.errors.DimensionalityError,
-                    pint.errors.UndefinedUnitError):
-                self._errors['out_units'] = "Incoherent output dimension"
+                    pint.errors.UndefinedUnitError) as e:
+                self._errors['out_units'] = f"Incoherent output " \
+                                            f"dimension {str(e)}"
                 return False
         return True
 
-    def expression_validation(self, expression: str, operands: [Operand]):
+    def expression_validation(
+            self,
+            unit_system: UnitSystem,
+            expression: str, operands: [Operand]):
         """
         Check syntactic validity of expression
+        :param unit_system: UnitSystem instance
         :param expression: Mathematical expression as string
         :param operands: list of Operand objects
         """
@@ -250,8 +271,8 @@ class ExpressionSerializer(serializers.Serializer):
         q_ = unit_system.ureg.Quantity
         try:
             q_(1, out_units)
-        except pint.errors.DimensionalityError:
-            self._errors['out_units'] = "Incoherent output dimension"
+        except pint.errors.DimensionalityError as e:
+            self._errors['out_units'] = f"Incoherent output dimension {str(e)}"
             return None
         return out_units
 
