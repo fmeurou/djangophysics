@@ -3,6 +3,7 @@ Calculations module APIs viewsets
 """
 
 import json
+from tokenize import TokenError
 
 from drf_yasg.utils import swagger_auto_schema
 from pint import UndefinedUnitError, DimensionalityError
@@ -48,14 +49,16 @@ class ValidateViewSet(APIView):
         try:
             if exp.is_valid(unit_system=us, dimensions_only=True):
                 expression = exp.create(exp.validated_data)
-                return Response(DimensionalitySerializer(
-                    expression.dimensionality(unit_system=us), many=True).data,
+                return Response(
+                    DimensionalitySerializer(
+                        expression.dimensionality(unit_system=us), many=True
+                    ).data,
                     content_type="application/json")
             else:
                 return Response(json.dumps(exp.errors),
                                 status=status.HTTP_406_NOT_ACCEPTABLE,
                                 content_type="application/json")
-        except (UndefinedUnitError, DimensionalityError) as e:
+        except (UndefinedUnitError, DimensionalityError, TokenError) as e:
             return Response(str(e),
                             status=status.HTTP_400_BAD_REQUEST,
                             content_type="application/json")

@@ -10,9 +10,9 @@ import uncertainties
 from django.contrib.auth.models import User
 from sympy import sympify, SympifyError
 
-from djangophysics.units.models import UnitSystem, Dimension
 from djangophysics.converters.models import BaseConverter, ConverterLoadError
 from djangophysics.units.exceptions import DimensionNotFound, UnitSystemNotFound
+from djangophysics.units.models import UnitSystem, Dimension
 from .exceptions import ExpressionCalculatorInitError
 
 
@@ -79,13 +79,28 @@ class Operand:
             self.unit = self.unit.replace(key, item)
         return self.unit
 
-    def get_magnitude(self):
+    def expr(self, unit_system: UnitSystem) -> str:
+        """
+        return expression of the operand
+        """
+        return f"({self.value} {self.get_unit(unit_system)})"
+
+    def get_magnitude(self) -> float:
+        """
+        Get magnitude of the operand
+        """
         return self.uvalue.n
 
-    def get_uncertainty(self):
+    def get_uncertainty(self) -> float:
+        """
+        Get the value of uncertainty
+        """
         return self.uvalue.s
 
-    def parse_uncertainty(self):
+    def parse_uncertainty(self) -> float:
+        """
+        Transform uncertainty into absolute float value
+        """
         if not self.uncertainty:
             return 0
         if self.uncertainty.endswith('%'):
@@ -99,6 +114,10 @@ class ComputationError(Exception):
 
 
 class Dimensionality:
+    """
+    Dimensionality class. Represents the dimension and the exponent of the
+    dimension
+    """
     code = None
     multiplicity = None
 
@@ -149,9 +168,16 @@ class Expression:
             return False, "Improper expression"
         return True, ""
 
-    def _validate_dimension(self, unit_system: UnitSystem) -> (bool, str):
+    def _validate_dimension(
+            self, unit_system: UnitSystem
+    ) -> (bool, str):
+        """
+        Validate dimensionality of an expression
+        :param unit_system: UnitSystem to use
+        """
         q_ = unit_system.ureg.Quantity
-        kwargs = {v.name: q_(v.value, v.unit) for v in self.operands}
+        kwargs = {v.name: q_(v.value, v.get_unit(unit_system=unit_system))
+                  for v in self.operands}
         try:
             result = unit_system.ureg.parse_expression(
                 self.expression, **kwargs
@@ -188,16 +214,22 @@ class Expression:
         return True, ''
 
     def dimensionality(self, unit_system: UnitSystem) -> [Dimensionality]:
+        """
+        Return dimensions list of an expression
+        """
         q_ = unit_system.ureg.Quantity
-        is_valid, error = self.validate(unit_system=unit_system)
+        is_valid, error = self.validate(
+            unit_system=unit_system
+        )
         if not is_valid:
             return []
         if self.out_units:
             return [{'code': key, 'multiplicity': value} for key, value in q_(
-                    1, self.out_units
+                1, self.out_units
             ).dimensionality.items()]
         else:
-            kwargs = {v.name: q_(v.uvalue, v.unit) for v in self.operands}
+            kwargs = {v.name: q_(v.uvalue, v.get_unit(unit_system))
+                      for v in self.operands}
             result = unit_system.ureg.parse_expression(
                 self.expression, **kwargs
             )
