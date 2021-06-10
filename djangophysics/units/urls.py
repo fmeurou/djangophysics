@@ -14,14 +14,15 @@ app_name = 'units'
 
 router = routers.DefaultRouter()
 router.register(r'', UnitSystemViewset, basename='unit_systems')
-router.register(r'(?P<system_name>\w+)/units',
-                UnitViewset, basename='units')
-router.register(r'(?P<system_name>\w+)/custom',
-                CustomUnitViewSet, basename='custom')
 router.register(r'(?P<system_name>\w+)/units/custom',
                 CustomUnitViewSet, basename='custom_units')
 router.register(r'(?P<system_name>\w+)/dimensions/custom',
                 CustomDimensionViewSet, basename='custom_dimensions')
+router.register(r'(?P<system_name>\w+)/units',
+                UnitViewset, basename='units')
+router.register(r'(?P<system_name>\w+)/custom',
+                CustomUnitViewSet, basename='custom')
+
 
 urlpatterns = [
     path('convert/', ConvertView.as_view()),
