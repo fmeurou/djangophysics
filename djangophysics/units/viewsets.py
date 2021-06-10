@@ -504,7 +504,9 @@ class CustomDimensionViewSet(ModelViewSet):
                 cd.unit_system = system_name
                 try:
                     cd.save()
-                except (UnitValueError, ValueError) as e:
+                except (UnitValueError,
+                        ValueError,
+                        DimensionDimensionError) as e:
                     return Response(str(e),
                                     status=status.HTTP_400_BAD_REQUEST)
                 serializer = CustomDimensionSerializer(cd)
