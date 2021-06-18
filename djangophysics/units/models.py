@@ -1,7 +1,6 @@
 """
 Units models
 """
-import inspect
 import logging
 import re
 from datetime import date
@@ -123,7 +122,6 @@ class UnitSystem:
         self.ureg._build_cache()
         self.dimensions_cache = self.available_dimensions()
         self.units_cache = self.available_units()
-
 
     def _load_additional_dimensions(
             self, dimensions: dict,
@@ -325,7 +323,7 @@ class UnitSystem:
         """
         if search_term:
             return [name for name in self.ureg._dimensions.keys()
-                     if search_term in name]
+                    if search_term in name]
         else:
             return list(self.ureg._dimensions.keys())
 
@@ -489,17 +487,24 @@ class Dimension:
         self.unit_system = unit_system
         self.code = code
         if code not in ['[compounded]', '[custom]'] and \
-            self.unit_system.dimensions_cache and \
+                self.unit_system.dimensions_cache and \
                 code not in self.unit_system.dimensions_cache.keys():
             raise DimensionNotFound(f"Dimension {code} not found")
 
     @property
     def name(self):
+        """
+        Name of the dimension.
+        """
         if self._name:
             return self._name
         else:
             code = self.code
-            name = code
+            name = code.replace(
+                '[', '').replace(
+                ']', '').replace(
+                '_', ' ').replace(
+                '-', ' ').capitalize()
             if self.code in DIMENSIONS:
                 dimension = DIMENSIONS[code]
                 name = dimension['name']
@@ -518,8 +523,6 @@ class Dimension:
                         pass
             self._name = name
             return name
-
-
 
     def __repr__(self):
         """
@@ -581,8 +584,8 @@ class Dimension:
                 )
             except UnitNotFound:
                 logging.info(f"Unit {u} not found "
-                                f"on unit system "
-                                f"{self.unit_system.system_name}")
+                             f"on unit system "
+                             f"{self.unit_system.system_name}")
                 continue
         unit_names.extend(self._prefixed_units(unit_names))
         return sorted(list(set(unit_names)), key=lambda x: x.name)
@@ -623,7 +626,7 @@ class Dimension:
         """
         try:
             return self.unit_system.unit(UNIT_SYSTEM_BASE_AND_DERIVED_UNITS[
-                self.unit_system.system_name][self.code])
+                                             self.unit_system.system_name][self.code])
         except KeyError:
             logging.info(
                 f'No base unit for dimension {self.code} '
@@ -716,7 +719,7 @@ class Unit:
                 dimensions.append(d)
         if not dimensions:
             return [Dimension(unit_system=self.unit_system,
-                             code='[compounded]'), ]
+                              code='[compounded]'), ]
         else:
             return dimensions
 

@@ -136,6 +136,24 @@ class DimensionTest(TestCase):
         dimension = Dimension(unit_system=us, code='[custom]')
         self.assertEqual(len(dimension.units), 0)
 
+    def test_dimension_name(self):
+        """
+        Test name transformation
+        """
+        cd = CustomDimension.objects.create(
+            user=self.user,
+            key=self.key,
+            unit_system='SI',
+            code="[myDim]",
+            name="My dimension",
+            relation="[length]/[luminance]"
+        )
+        us = UnitSystem(user=self.user, key=str(self.key))
+        dims = us.available_dimensions()
+        self.assertEqual(dims['[myDim]'].name, 'My dimension')
+        self.assertEqual(dims['[length]'].name, _('length'))
+        self.assertEqual(dims['[esu_magnetic_dipole]'].name, 'Esu magnetic dipole')
+
 
 class UnitTest(TestCase):
     """
@@ -990,7 +1008,7 @@ class CustomDimensionAPITest(TestCase):
         else:
             # Non paginated results
             self.assertEqual(len(response.json()), 1)
-            self.assertEqual(response.json()[0]['code'], 'my_dimension')
+            self.assertEqual(response.json()[0]['code'], '[my_dimension]')
 
     def test_connected_duplicate_post(self):
         """
