@@ -185,7 +185,7 @@ class UnitSystem:
             else:
                 qs = CustomDimension.objects.filter(user=user)
             if key:
-                qs = qs.filter(key=key)
+                qs = qs.filter(models.Q(key=key) | models.Q(key__isnull=True))
         else:
             qs = CustomDimension.objects.filter(pk=-1)
         qs = qs.filter(
@@ -222,7 +222,7 @@ class UnitSystem:
             else:
                 qs = CustomUnit.objects.filter(user=user)
             if key:
-                qs = qs.filter(key=key)
+                qs = qs.filter(models.Q(key=key) | models.Q(key__isnull=True))
         else:
             qs = CustomUnit.objects.filter(pk=-1)
         qs = qs.filter(unit_system=self.system_name).values(

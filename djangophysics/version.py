@@ -1,1 +1,1 @@
-djangophysics_version = [1, 5, 4, ""]
+djangophysics_version = [1, 6, 0, ""]
