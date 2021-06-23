@@ -136,7 +136,7 @@ class UnitSystem:
             return False
         added_dimensions = []
         for key, items in dimensions[self.system_name].items():
-            if key not in available_dimensions.keys():
+            if key not in available_dimensions:
                 self.ureg.define(
                     f"{key} = {items['relation']}")
                 added_dimensions.append(key)
