@@ -195,7 +195,6 @@ class UnitAPITest(TestCase):
     """
     Test Unit APIs
     """
-
     def test_list_request(self):
         """
         Test list of units
@@ -296,6 +295,34 @@ class UnitAPITest(TestCase):
         self.assertEqual(len(response.json()),
                          len(Dimension(unit_system=us,
                                        code='[length]').units))
+
+    def test_list_with_domain_request(self):
+        """
+        Test list filtered by dimension
+        """
+        client = APIClient()
+        response = client.get(
+            '/units/SI/units/',
+            data={
+                'domain': 'mydomain'
+            }
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.json()), 1)
+
+    def test_list_with_wrong_domain_request(self):
+        """
+        Test list filtered by dimension
+        """
+        client = APIClient()
+        response = client.get(
+            '/units/SI/units/',
+            data={
+                'domain': 'mywrongdomain'
+            }
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.json()), 0)
 
     def test_list_with_compounded_dimension_request(self):
         """

@@ -2,18 +2,10 @@
 Settings for Units module
 """
 from django.utils.translation import gettext_lazy as _
+DOMAINS = {}
 
 # This will display these units in the list of units
-ADDITIONAL_DIMENSIONS = {
-    '[massic_heating_value]': {
-        'name': _('massic heating value'),
-        'relation': '[energy]/[mass]'
-    },
-    '[volumic_heating_value]': {
-        'name': _('volumic heating value'),
-        'relation': '[energy]/[volume]'
-    },
-}
+ADDITIONAL_DIMENSIONS = {}
 
 # This will display these units in the list of units
 ADDITIONAL_UNITS = {}

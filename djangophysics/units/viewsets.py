@@ -10,6 +10,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_cookie
 from django_filters import rest_framework as filters
+from django.conf import settings
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import permissions, status
@@ -24,6 +25,7 @@ from djangophysics.converters.serializers import ConverterResultSerializer
 from djangophysics.core.helpers import validate_language
 from djangophysics.core.pagination import PageNumberPagination
 from . import DIMENSIONS
+from .settings import DOMAINS
 from .exceptions import UnitConverterInitError, UnitSystemNotFound, \
     UnitNotFound, DimensionNotFound, UnitValueError
 from .filters import CustomUnitFilter, CustomDimensionFilter
@@ -36,6 +38,11 @@ from .serializers import UnitSerializer, UnitSystemSerializer, \
     UnitConversionPayloadSerializer, DimensionSerializer, \
     DimensionWithUnitsSerializer, CustomUnitSerializer, \
     CustomDimensionSerializer
+
+try:
+    PHYSICS_DOMAINS = settings.PHYSICS_DOMAINS
+except AttributeError:
+    PHYSICS_DOMAINS = DOMAINS
 
 
 class UnitSystemViewset(ViewSet):
@@ -170,6 +177,10 @@ class UnitViewset(ViewSet):
         'dimension', openapi.IN_QUERY,
         description="Unit dimension",
         type=openapi.TYPE_STRING)
+    domain = openapi.Parameter(
+        'domain', openapi.IN_QUERY,
+        description="Unit domain (ghg, ...)",
+        type=openapi.TYPE_STRING)
     key = openapi.Parameter(
         'key',
         openapi.IN_QUERY,
@@ -190,7 +201,7 @@ class UnitViewset(ViewSet):
                     "Prefix with - for descending sort",
         type=openapi.TYPE_STRING)
 
-    @swagger_auto_schema(manual_parameters=[dimension, key,
+    @swagger_auto_schema(manual_parameters=[dimension, domain, key,
                                             ordering,
                                             language, language_header],
                          responses={200: units_response})
@@ -220,6 +231,7 @@ class UnitViewset(ViewSet):
                 key=key)
             units = []
             dimension_param = request.GET.get(key='dimension')
+            domain_param = request.GET.get(key='domain')
             if dimension_param:
                 try:
                     dimension = Dimension(unit_system=us,
@@ -233,6 +245,8 @@ class UnitViewset(ViewSet):
                 if available_units:
                     units = [us.unit(unit_name=unit_name)
                              for unit_name in available_units]
+            if domain_param:
+                units = [u for u in units if u.code in PHYSICS_DOMAINS.get(domain_param, [])]
             units = sorted(units, key=lambda x: getattr(x, ordering),
                            reverse=descending)
             serializer = UnitSerializer(
@@ -240,8 +254,8 @@ class UnitViewset(ViewSet):
                 many=True,
                 context={'request': request})
             return Response(serializer.data)
-        except UnitSystemNotFound:
-            return Response('Invalid Unit System',
+        except UnitSystemNotFound as e:
+            return Response(f'Invalid Unit System: {str(e)}',
                             status=status.HTTP_404_NOT_FOUND)
 
     @swagger_auto_schema(manual_parameters=[key, language, language_header],
@@ -252,8 +266,10 @@ class UnitViewset(ViewSet):
         """
         List Units grouped by dimension, filter on key, translated
         """
-        language = validate_language(request.GET.get('language',
-                                                     request.LANGUAGE_CODE))
+        language = validate_language(request.GET.get(
+            'language',
+            request.LANGUAGE_CODE)
+        )
         try:
             key = request.GET.get('key', None)
             user = request.user if \

@@ -371,3 +371,7 @@ PHYSICS_ADDITIONAL_DIMENSIONS = {
         'relation': '[energy]/[mass]'
     }
 }
+
+PHYSICS_DOMAINS = {
+    'mydomain': ['meter', ]
+}

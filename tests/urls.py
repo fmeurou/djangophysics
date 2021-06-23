@@ -56,5 +56,5 @@ urlpatterns = [
         name='schema-redoc'),
     path('', include('django.contrib.auth.urls')),
     path('graphql', include(graphql_urls)),
-    path('', include(physics_urls))
+    path('', include(physics_urls)),
 ]
