@@ -508,7 +508,9 @@ class RateConverter(BaseConverter):
         """
         result = ConverterResult(id=self.id, target=self.base_currency)
         for amount in self.data:
-            rate = self.cached_currencies[amount.date_obj][amount.currency]
+            rate = self.cached_currencies.get(
+                amount.date_obj, {}
+            ).get(amount.currency)
             if rate:
                 value = float(amount.amount) / rate
                 result.increment_sum(value)
