@@ -1016,6 +1016,34 @@ class RateConverterAPITest(TestCase):
         self.assertIn('sum', response.json())
         self.assertEqual(len(response.json().get('detail')), len(self.amounts))
 
+    def test_convert_error_request(self):
+        """
+        Test conversion request
+        """
+        payload = {
+          "data": [
+            {
+              "currency": "AMD",
+              "amount": 22,
+              "date_obj": "2021-08-03"
+            }
+          ],
+          "target": "EUR"
+        }
+        Rate.objects.fetch_rates(
+            base_currency=self.base_currency,
+            currency=self.currency)
+        Rate.objects.fetch_rates(base_currency=self.currency, currency='AUD')
+        amounts = RateAmountSerializer(self.amounts, many=True)
+        client = APIClient()
+        response = client.post(
+            '/rates/convert/',
+            data=payload,
+            format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('errors', response.json())
+        self.assertEqual(response.json().get('errors')[0]['unit'], 'AMD')
+
     def test_convert_batch_request(self):
         """
         Test batch conversion
