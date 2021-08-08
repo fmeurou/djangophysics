@@ -31,6 +31,23 @@ class GraphQLTest(TestCase):
         self.assertEqual(len(response.json()['data']['countries']),
                          len(Country.all_countries()))
 
+    def test_regions(self):
+        """
+        Test list of regions
+        """
+        gql = {
+            'query': "{regions {code, name}}"
+        }
+        response = self.client.post(
+            '/graphql',
+            data=gql,
+            format='json')
+        self.assertIsNone(response.json().get('errors'))
+        self.assertIsNotNone(response.json().get('data'))
+        self.assertEqual(len(response.json()['data']['regions']),
+                         len(Region.all_regions()))
+
+
     def test_search_countries(self):
         """
         Test list of countries with filter

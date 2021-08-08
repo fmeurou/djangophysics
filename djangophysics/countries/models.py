@@ -2,6 +2,7 @@
 Models for Country module
 """
 
+import csv
 import logging
 import os
 import re
@@ -110,6 +111,15 @@ class Country:
                            key=lambda x: getattr(x, ordering),
                            reverse=descending))
 
+    @classmethod
+    def countries_for_region(cls, region: str):
+        """
+        List countries for a specific region
+        :param region: name of the region
+        """
+        ci = CountryInfo()
+        return [c['ISO']['alpha2'] for c in ci.all().values() if 'europe' in c.get('region', '').lower()]
+
     def base(self):
         """
         Returns a basic representation of a country with name and iso codes
@@ -160,8 +170,7 @@ class Country:
                 'name': tz_info,
                 'offset': f'UTC {offset}',
                 'numeric_offset': numeric_offset,
-                'current_time': base_time.astimezone(
-                    tz).strftime('%Y-%m-%d %H:%M')
+                'current_time': base_time.astimezone(tz).strftime('%Y-%m-%d %H:%M')
             })
         return sorted(output, key=lambda x: x['numeric_offset'])
 
@@ -291,6 +300,13 @@ class Country:
             ordering=ordering
         )
 
+    @staticmethod
+    def regions() -> []:
+        """
+        List of regions
+        """
+        return ['Africa', 'Americas', 'Asia', 'Europe', 'Oceania']
+
 
 class CountrySubdivisionNotFound(Exception):
     """
@@ -402,7 +418,7 @@ class Location:
     GPS Location
     """
     latitude = None  # type: float
-    longitude = None # type: float
+    longitude = None  # type: float
 
 
 class Address:
@@ -459,3 +475,242 @@ class Address:
     def country(self):
         return Country(alpha_2=self.country_alpha_2)
 
+
+class RegionData:
+    __instance__ = None
+
+    @classmethod
+    def instance(cls):
+        if not cls.__instance__:
+            cls.__instance__ = cls.RegionDataPrivate()
+        return cls.__instance__
+
+    def __getattr__(self, item):
+        if item == 'region_data':
+            return self.__instance__.region_data
+        elif item == 'subregion_data':
+            return self.__instance__.region_data
+        elif item == 'country_data':
+            return self.__instance__.country_data
+        else:
+            return super().__getattr__(item)
+
+    class RegionDataPrivate:
+        region_data = {}
+        region_names = []
+        subregion_data = {}
+        subregion_names = []
+        country_data = {}
+        COLUMNS = {
+            'region_code': 2,
+            'region_name': 3,
+            'subregion_code': 4,
+            'subregion_name': 5,
+            'country_alpha2': 10
+        }
+
+        def __init__(self):
+            """
+            Initiate load of data
+            """
+            filename = 'unsd_methodology.csv'
+            data_dir = os.path.dirname(os.path.abspath(__file__))
+            source_file = os.path.join(data_dir, 'data', filename)
+            region_names = []
+            subregions_names = []
+            first_line = True
+            with open(source_file) as source_csv:
+                reader = csv.reader(source_csv)
+                for line in reader:
+                    if first_line:
+                        first_line = False
+                        continue
+                    self.parse_region(line=line)
+                    self.parse_subregion(line=line)
+                    self.parse_countries(line=line)
+                    if line[self.COLUMNS['region_name']]:
+                        region_names.append(line[self.COLUMNS['region_name']])
+                    if line[self.COLUMNS['subregion_name']]:
+                        subregions_names.append(region_names.append(line[self.COLUMNS['subregion_name']]))
+
+            self.region_names = set(region_names)
+            self.subregion_names = set(subregions_names)
+
+        def parse_region(self, line):
+            """
+            Parse region from CSV
+            """
+            if not line[self.COLUMNS['region_name']]:
+                return
+            if line[self.COLUMNS['region_name']] not in self.region_data:
+                self.region_data[line[self.COLUMNS['region_name']]] = {
+                    'code': line[self.COLUMNS['region_code']],
+                    'name': line[self.COLUMNS['region_name']],
+                    'subregions': [line[self.COLUMNS['subregion_code']], ],
+                    'countries': [line[self.COLUMNS['country_alpha2']], ]
+                }
+            else:
+                self.region_data[line[self.COLUMNS['region_name']]]['countries'].append(line[self.COLUMNS['country_alpha2']])
+                self.region_data[line[self.COLUMNS['region_name']]]['subregions'].append(line[self.COLUMNS['subregion_code']])
+            self.region_data[line[self.COLUMNS['region_code']]] = self.region_data[line[self.COLUMNS['region_name']]]
+
+        def parse_subregion(self, line):
+            """
+            Parse subregions from CSV
+            """
+            if not line[self.COLUMNS['subregion_name']]:
+                return
+            if line[self.COLUMNS['subregion_name']] not in self.subregion_data:
+                self.subregion_data[line[self.COLUMNS['subregion_name']]] = {
+                    'region': {
+                        'code': line[self.COLUMNS['region_code']],
+                        'name': line[self.COLUMNS['region_name']]
+                    },
+                    'code': line[self.COLUMNS['subregion_code']],
+                    'name': line[self.COLUMNS['subregion_name']],
+                    'countries': [line[self.COLUMNS['country_alpha2']], ]
+                }
+            else:
+                self.subregion_data[line[self.COLUMNS['subregion_name']]]['countries'].append(
+                    line[self.COLUMNS['country_alpha2']])
+            self.subregion_data[line[self.COLUMNS['subregion_code']]] = self.subregion_data[line[self.COLUMNS['subregion_name']]]
+
+        def parse_countries(self, line):
+            """
+            parse countries from CSV
+            :param line: line from CSV
+            """
+            if not line[self.COLUMNS['country_alpha2']]:
+                return
+
+            self.country_data[line[self.COLUMNS['country_alpha2']]] = {
+                'region': {
+                    'code': line[self.COLUMNS['region_code']],
+                    'name': line[self.COLUMNS['region_name']]
+                },
+                'subregion': {
+                    'code': line[self.COLUMNS['subregion_code']],
+                    'name': line[self.COLUMNS['subregion_name']]
+                }
+            }
+
+
+class InvalidRegionName(Exception):
+    message = "Invalid region or subregion name"
+
+
+class Region:
+    name = None
+    code = None
+    type = None
+    _parent = None
+    _country_list = None
+    _data = None
+
+    def __init__(self, key):
+        region_data = RegionData.instance()
+        if key in region_data.region_data:
+            self.get_region(key=key)
+        elif key in region_data.subregion_data:
+            self.get_subregion(key=key)
+        else:
+            raise InvalidRegionName(f"Region not found: {key}")
+
+    @classmethod
+    def all_regions(cls, ordering: str='name'):
+        region_data = RegionData.instance()
+        output = cls._all_regions(region_data.region_data)
+        return sorted(output, key=lambda x: getattr(x, ordering))
+
+    @classmethod
+    def all_subregions(cls, ordering: str='name'):
+        region_data = RegionData.instance()
+        output = cls._all_regions(region_data.subregion_data)
+        return sorted(output, key=lambda x: getattr(x, ordering))
+
+    @classmethod
+    def _all_regions(cls, data):
+        output = []
+        codes = []
+        for key in data:
+            if key:
+                region = Region(key=key)
+                if region.code not in codes:
+                    output.append(region)
+                    codes.append(region.code)
+        return output
+
+    def get_region(self, key: str):
+        """
+        Get a Region from code or name
+        :param key: Name or code of the region
+        """
+        region_data = RegionData.instance()
+        region = region_data.region_data[key]
+        self.name = region.get('name')
+        self.code = region.get('code')
+        self.type = 'region'
+        self._parent = None
+        self._country_list = region.get('countries')
+
+    def get_subregion(self, key):
+        """
+        Get a SubRegion from code or name
+        :param key: Name or code of the subregion
+        """
+        region_data = RegionData.instance()
+        subregion = region_data.subregion_data[key]
+        self.name = subregion.get('name')
+        self.code = subregion.get('code')
+        self.type = 'subregion'
+        self._parent = subregion['region']['name']
+        self._country_list = subregion.get('countries')
+
+    def parent(self, *args, **kwargs):
+        """
+        Return the parent Region object
+        """
+        if self.parent:
+            return Region(key=self._parent)
+        return None
+
+    def subregions(self, *args, **kwargs):
+        region_data = RegionData.instance()
+        return set([Region(sr.get('code')) for sr in region_data.subregion_data.values()
+                if sr.get('region', {}).get('code') == self.code
+                ])
+
+    def countries(self, *args, **kwargs):
+        region_data = RegionData.instance()
+        return [Country(alpha_2=c) for c in self._country_list if c]
+
+    @classmethod
+    def region_for_country(cls, alpha_2):
+        region_data = RegionData.instance()
+        if alpha_2 in region_data.country_data:
+            return cls(key=region_data.country_data[alpha_2]['region']['code'])
+        return None
+
+    @classmethod
+    def subregion_for_country(cls, alpha_2):
+        region_data = RegionData.instance()
+        if alpha_2 in region_data.country_data:
+            return cls(key=region_data.country_data[alpha_2]['subregion']['code'])
+        return None
+
+    @classmethod
+    def search(cls, term: str, ordering: str='name') -> []:
+        """
+        Search for regions and subregions
+        :param term: Search term
+        :param ordering: order results
+        """
+        if ordering not in ['name', 'code', 'type']:
+            ordering = 'name'
+        region_data = RegionData.instance()
+        return sorted(
+                [cls(key) for key in region_data.region_data
+                 if term.lower() in key.lower()] + \
+                [cls(key) for key in region_data.subregion_data
+                 if term.lower() in key.lower()],
+            key=lambda x: getattr(x, ordering))

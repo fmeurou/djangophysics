@@ -12,7 +12,6 @@ from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_cookie
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from drf_yasg.views import deferred_never_cache
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -21,9 +20,9 @@ from rest_framework.viewsets import ViewSet
 
 from djangophysics.core.helpers import service, validate_language
 from .models import Country, CountryNotFoundError, \
-    CountrySubdivision, CountrySubdivisionNotFound
+    CountrySubdivision, CountrySubdivisionNotFound, Region, InvalidRegionName
 from .serializers import CountrySerializer, CountryDetailSerializer, \
-    CountrySubdivisionSerializer, AddressSerializer
+    CountrySubdivisionSerializer, AddressSerializer, RegionSerializer
 from .services import GeocoderRequestError
 
 
@@ -374,7 +373,6 @@ class CountrySubdivisionViewset(ViewSet):
         :param alpha_2: Country ISO 3166-1 alpha_2 code
         """
         try:
-            country = Country(alpha_2=alpha_2)
             ordering = request.GET.get('ordering', 'name')
             search = request.GET.get('search')
             if search:
@@ -478,3 +476,83 @@ class CountrySubdivisionViewset(ViewSet):
         except CountrySubdivisionNotFound:
             return Response("Unknown country subdivision",
                             status=HTTP_404_NOT_FOUND)
+
+
+class RegionViewset(ViewSet):
+    """
+    View for Country subdivisions
+    """
+    lookup_field = 'code'
+
+    language_header = openapi.Parameter(
+        'Accept-Language', openapi.IN_HEADER,
+        description="language",
+        type=openapi.TYPE_STRING)
+    language = openapi.Parameter(
+        'language',
+        openapi.IN_QUERY,
+        description="language",
+        type=openapi.TYPE_STRING)
+    search = openapi.Parameter(
+        'search',
+        openapi.IN_QUERY,
+        description="Search term",
+        type=openapi.TYPE_STRING)
+    ordering = openapi.Parameter(
+        'ordering', openapi.IN_QUERY,
+        description="Sort on name, code, type. "
+                    "Prefix with - for descending sort",
+        type=openapi.TYPE_STRING)
+
+    region_response = openapi.Response(
+        'List of regions', RegionSerializer)
+
+    @swagger_auto_schema(
+        manual_parameters=[language, language_header, search, ordering],
+        responses={200: region_response})
+    def list(self, request):
+        """
+        List country subdivisions. this view is not paginated
+        :param request: HTTP request
+        """
+        ordering = request.GET.get('ordering', 'name')
+        search = request.GET.get('search')
+        if search:
+            rs = Region.search(
+                term=search,
+                ordering=ordering
+            )
+        else:
+            rs = Region.all_regions(ordering=ordering)
+        serializer = RegionSerializer(
+            rs,
+            many=True,
+            context={'request': request}
+        )
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        manual_parameters=[language, language_header],
+        responses={200: region_response})
+    @action(['GET'],
+            detail=True,
+            url_path='subregions',
+            url_name='subregions')
+    def subregions(self, request, code):
+        """
+        List subregions for a region. this view is not paginated
+        :param request: HTTP request
+        :param code: Region code
+        """
+        try:
+            r = Region(key=code)
+            serializer = RegionSerializer(
+                r.subregions(),
+                many=True,
+                context={'request': request}
+            )
+            return Response(serializer.data, content_type="application/json")
+        except InvalidRegionName:
+            return Response(
+                "Invalid region code",
+                status=status.HTTP_404_NOT_FOUND)

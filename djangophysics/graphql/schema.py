@@ -4,7 +4,7 @@ Djangophysics GraphQL schemas
 from ariadne import QueryType, gql, make_executable_schema
 
 from ..core.helpers import validate_language, service
-from ..countries.models import Country, CountrySubdivision
+from ..countries.models import Country, CountrySubdivision, Region
 from ..currencies.models import Currency
 from ..rates.models import Rate
 from ..units.models import UnitSystem, Dimension
@@ -111,10 +111,10 @@ type_defs = '''
         alpha_2: String!,
         "ISO 3166 alpha3 trigram"
         alpha_3: String!,
-        "Name of the region the country belongs to"
-        region: String,
-        "Name of the subregion the country belongs to"
-        subregion: String,
+        "World region the country belongs to"
+        region: Region,
+        "World Subregion the country belongs to"
+        subregion: Region,
         "TLD associated with the country"
         tld: [String], 
         "Capital city"
@@ -135,6 +135,9 @@ type_defs = '''
         unit_system_obj: UnitSystem
     }
     
+    """
+    Country subdivision based on ISO 3166-2
+    """
     type CountrySubdivision {
         "ISO 3166-2 Name of the subdivision"
         name: String!,
@@ -153,7 +156,25 @@ type_defs = '''
         "Subdivision children"
         children: [CountrySubdivision]
     }
-        
+    
+    """
+    World regions and subregions based on UR classification
+    """
+    type Region {
+        "UN Region code"
+        code: String!,
+        "UN Region name"
+        name: String!,
+        "Region type (region or subregion)"
+        type: String!, 
+        "Parent region, applicable if type = subregion"
+        parent: Region,
+        "Subregions, applicable if type = region"
+        subregions: [Region],
+        "List of region countries"
+        countries: [Country],
+    }
+    
     """
     Conversion rate between two currencies
     """
@@ -246,6 +267,14 @@ type_defs = '''
         country_subdivisions(alpha_2: String!): [CountrySubdivision]
         "Country subdivision details"
         country_subdivision(alpha_2: String!, code: String!): CountrySubdivision
+        "World regions"
+        regions: [Region]
+        "World subregions"
+        subregions: [Region]
+        "World region search"
+        regions_search(term: String!): [Region]
+        "World region"
+        region(key: String!): Region
         "Searchable list of currencies"
         currencies(term: String): [Currency]
         "Currency details"
@@ -344,12 +373,54 @@ def resolve_country_subdivision_search(
 @query.field("country_subdivision")
 def resolve_country_subdivision(_, info, alpha_2, code):
     """
-    Country resolver
+    Country subdivision resolver
     :param info: QraphQL request context
     :param alpha_2: ISO 3166 alpha2 code
     :param code: ISO 3166-2 code
     """
     return CountrySubdivision(code=code)
+
+
+@query.field("regions")
+def resolve_regions(_, info):
+    """
+    Region list resolver
+    """
+    return Region.all_regions()
+
+@query.field("subregions")
+def resolve_subregions(_, info):
+    """
+    Subregion list resolver
+    """
+    return Region.all_subregions()
+
+@query.field("regions_search")
+def resolve_regions_search(_, info, term, ordering='name'):
+    """
+    Region search resolver
+    :param term: search term
+    :param ordering: result ordering
+    """
+    return Region.search(term=term, ordering=ordering)
+
+
+@query.field("regions_search")
+def resolve_regions_search(_, info, term, ordering='name'):
+    """
+    Region search resolver
+    :param term:
+    """
+    return Region.search(term=term, ordering=ordering)
+
+
+@query.field("region")
+def resolve_region(_, info, key):
+    """
+    Region resolver
+    :param key: UN code or region name
+    """
+    return Region(key=key)
 
 
 @query.field("currencies")
@@ -478,7 +549,7 @@ def resolve_geocode(_, info, address: str, key: str,
 
 @query.field("reverse_geocode")
 def resolve_reverse_geocode(_, info, latitude: float, longitude: float, key: str,
-                    language: str = 'en', geocoder: str = 'google'):
+                            language: str = 'en', geocoder: str = 'google'):
     language = validate_language(lang=language)
     geocoder = service(
         service_type='geocoding',

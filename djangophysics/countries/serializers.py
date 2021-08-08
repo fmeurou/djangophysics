@@ -342,3 +342,9 @@ class AddressSerializer(serializers.Serializer):
             return CountrySubdivisionSerializer(obj.county).data
         else:
             return None
+
+
+class RegionSerializer(serializers.Serializer):
+    code = serializers.CharField(read_only=True)
+    name = serializers.CharField(read_only=True)
+

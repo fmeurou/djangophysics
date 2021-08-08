@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.test import APIClient
 
 from djangophysics.core.helpers import service
-from .models import Country, CountrySubdivision, CountrySubdivisionNotFound
+from .models import Country, CountrySubdivision, CountrySubdivisionNotFound, RegionData, Region
 from .serializers import CountrySerializer, CountrySubdivisionSerializer, \
     AddressSerializer
 from .services import GeocoderRequestError
@@ -819,3 +819,110 @@ class CountrySubdivisionAPITestCase(TestCase):
         csd = CountrySubdivisionSerializer(data=response.json(), many=True)
         self.assertTrue(csd.is_valid())
         self.assertEqual(len(response.json()), 1)
+
+
+class RegionDataTestCase(TestCase):
+
+    def test_singleton(self):
+        """
+        Load RegionData singleton
+        """
+        rd1 = RegionData.instance()
+        rd2 = RegionData.instance()
+        self.assertEqual(rd1, rd2)
+
+
+class RegionTestCase(TestCase):
+
+    def setUp(self):
+        """
+        Load data
+        """
+        self.rd = RegionData.instance()
+
+    def test_creation(self):
+        r = Region(key='Africa')
+        self.assertEqual(r.name, 'Africa')
+
+    def test_all_regions(self):
+        """
+        Test length of all regions
+        """
+        ar = Region.all_regions()
+        self.assertNotEqual(len(ar), 0)
+        self.assertEqual(len(ar), len(self.rd.region_data))
+
+    def test_all_subregions(self):
+        """
+        Test length of all subregions
+        """
+        asr = Region.all_subregions()
+        self.assertNotEqual(len(asr), 0)
+        self.assertEqual(len(asr), len(self.rd.subregion_data))
+
+    def test_parent_region(self):
+        """
+        Test obtaining region by key
+        """
+        r = Region(key='Southern Europe')
+        self.assertIsNotNone(r)
+        self.assertEqual(r.parent_region().name, 'Europe')
+
+    def test_region_for_country(self):
+        """
+        Test Region for country
+        """
+        r = Region.region_for_country(alpha_2='FR')
+        self.assertEqual(r.name, 'Europe')
+        rf = Region.region_for_country(alpha_2='ZZ')
+        self.assertIsNone(rf)
+
+    def test_subregion_for_country(self):
+        """
+        Test Region for country
+        """
+        r = Region.subregion_for_country(alpha_2='FR')
+        self.assertEqual(r.name, 'Western Europe')
+        rf = Region.subregion_for_country(alpha_2='ZZ')
+        self.assertIsNone(rf)
+
+    def test_search(self):
+        """
+        Test region search
+        """
+        term = 'eur'
+        result = Region.search(term=term)
+        self.assertIn('Europe', [r.name for r in result])
+        self.assertIn('Western Europe', [r.name for r in result])
+
+    def test_search_ordering(self):
+        """
+        Test search with ordering
+        """
+        term = 'eur'
+        result = Region.search(term=term, ordering='code')
+        self.assertEqual('039', result[0].code)
+
+
+class RegionAPITestCase(TestCase):
+
+    def test_list_regions(self):
+        """
+        Testing the list of regions
+        """
+        client = APIClient()
+        response = client.get('/countries/regions/', format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), len(Region.all_regions()))
+        self.assertEqual(response.data[0].get('name'), 'Africa')
+
+    def test_list_subregions(self):
+        """
+        Testing the list of subregions for a given region
+        """
+        client = APIClient()
+        response = client.get('/countries/regions/002/subregions/', format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        region = Region(key='002')
+        self.assertEqual(len(response.data), len(region.subregions()))
+        self.assertIn('Northern Africa', [r.get('name') for r in response.data])

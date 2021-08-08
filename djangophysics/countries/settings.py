@@ -1,6 +1,7 @@
 """
 Settings specific to Country module
 """
+from django.utils.translation import ugettext_lazy as _
 
 FLAG_SOURCE = 'https://raw.githubusercontent.com/cristiroma/countries' \
               '/master/data/flags/SVG/{alpha_2}.svg?sanitize=true'
@@ -37,5 +38,4 @@ GEOCODING_SERVICE_SETTINGS = {
             'address': 'address'
         }
     }
-
 }
