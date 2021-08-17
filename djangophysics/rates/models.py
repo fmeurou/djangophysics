@@ -136,7 +136,7 @@ class RateManager(models.Manager):
             key=key,
             base_currency=base_currency,
             date_obj=date_obj)
-        if rate.pk:
+        if rate and rate.pk:
             return rate
         return Rate()
 
