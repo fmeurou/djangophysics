@@ -2,7 +2,6 @@
 Models for Rates module
 """
 import logging
-import datetime
 from datetime import date, timedelta
 
 import networkx as nx
@@ -174,7 +173,7 @@ class RateManager(models.Manager):
                 f"key {key} at date {date_obj} does not exist") \
                 from exc
 
-    def  find_rate(self, currency: str,
+    def find_rate(self, currency: str,
                   rate_service: str = None,
                   key: str = None,
                   base_currency: str = settings.BASE_CURRENCY,
@@ -192,6 +191,7 @@ class RateManager(models.Manager):
         :param use_forex: use rate service to fill the gaps
         """
         if use_forex:
+            # Try fetching value directly from service
             if not self.fetch_rates(
                     base_currency=base_currency,
                     currency=currency,
@@ -199,6 +199,7 @@ class RateManager(models.Manager):
                     date_obj=date_obj):
                 return Rate()
         try:
+            # Find a path between currency and base currency
             rates = self.currency_shortest_path(
                 currency=currency,
                 base_currency=base_currency,
@@ -207,7 +208,7 @@ class RateManager(models.Manager):
             )
         except NoRateFound:
             # No relation found, try fetching rate
-            return self.find_rate(
+            rate = self.find_rate(
                 currency=currency,
                 rate_service=rate_service,
                 key=key,
@@ -215,6 +216,26 @@ class RateManager(models.Manager):
                 date_obj=date_obj,
                 use_forex=True
             )
+            if not rate:
+                # No rate has been found, trying the search for the reciprocal conversion rate
+                reverse_rate = self.find_rate(
+                    currency=base_currency,
+                    rate_service=rate_service,
+                    key=key,
+                    base_currency=currency,
+                    date_obj=date_obj,
+                    use_forex=True
+                )
+                if reverse_rate and reverse_rate.value:
+                    # Reverse rate exists, store the original rate
+                    rate = Rate.objects.create(
+                        key=key,
+                        value_date=date_obj,
+                        currency=currency,
+                        base_currency=base_currency,
+                        value=1 / reverse_rate.value
+                    )
+            return rate
         # Direct connection between rates
         if len(rates) == 2:
             return Rate.objects.filter(
