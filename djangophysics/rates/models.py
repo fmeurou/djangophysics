@@ -173,6 +173,90 @@ class RateManager(models.Manager):
                 f"key {key} at date {date_obj} does not exist") \
                 from exc
 
+    def _find_rate_or_reverse(self,
+                         currency: str,
+                         rate_service: str = None,
+                         key: str = None,
+                         base_currency: str = settings.BASE_CURRENCY,
+                         date_obj: date = date.today()) -> BaseRate:
+        """
+        Returns the corresponding rate. 
+        If the rate does not exists, it looks for the reverse rate and creates the corresponding rate in the 
+        database
+        :param currency: source currency code
+        :param base_currency: base currency code
+        :param key: Key specific to a client
+        :param date_obj: Date to obtain the conversion rate for
+        :param rate_service: Rate service to use
+        """
+        rate = self.find_rate(
+            currency=currency,
+            rate_service=rate_service,
+            key=key,
+            base_currency=base_currency,
+            date_obj=date_obj,
+            use_forex=True
+        )
+        if not rate:
+            # No rate has been found, trying the search for the reciprocal conversion rate
+            reverse_rate = self.find_rate(
+                currency=base_currency,
+                rate_service=rate_service,
+                key=key,
+                base_currency=currency,
+                date_obj=date_obj,
+                use_forex=True
+            )
+            if reverse_rate and reverse_rate.value:
+                # Reverse rate exists, store the original rate
+                rate = Rate.objects.create(
+                    key=key,
+                    value_date=date_obj,
+                    currency=currency,
+                    base_currency=base_currency,
+                    value=1 / reverse_rate.value
+                )
+        return rate
+
+    def _query_rate_or_reverse(self,
+                               currency: str,
+                               key: str = None,
+                               base_currency: str = settings.BASE_CURRENCY,
+                               date_obj: date = date.today()) -> BaseRate:
+        """
+        Returns the corresponding rate.
+        If the rate does not exists, it looks for the reverse rate and creates the corresponding rate in the
+        database
+        :param currency: source currency code
+        :param base_currency: base currency code
+        :param key: Key specific to a client
+        :param date_obj: Date to obtain the conversion rate for
+        """
+        rate = Rate.objects.filter(
+            currency=currency,
+            base_currency=base_currency,
+            value_date=date_obj
+        ).filter(
+            models.Q(key=key) | models.Q(user__isnull=True)
+        ).order_by('-key').first()
+        if not rate:
+            reverse_rate = Rate.objects.filter(
+                currency=base_currency,
+                base_currency=currency,
+                value_date=date_obj
+            ).filter(
+                models.Q(key=key) | models.Q(user__isnull=True)
+            ).order_by('-key').first()
+            if reverse_rate and reverse_rate.value:
+                rate = Rate.objects.create(
+                    key=key,
+                    value_date=date_obj,
+                    currency=currency,
+                    base_currency=base_currency,
+                    value=1 / reverse_rate.value
+                )
+        return rate
+
     def find_rate(self, currency: str,
                   rate_service: str = None,
                   key: str = None,
@@ -208,43 +292,23 @@ class RateManager(models.Manager):
             )
         except NoRateFound:
             # No relation found, try fetching rate
-            rate = self.find_rate(
+            rate = self._find_rate_or_reverse(
                 currency=currency,
                 rate_service=rate_service,
                 key=key,
                 base_currency=base_currency,
-                date_obj=date_obj,
-                use_forex=True
+                date_obj=date_obj
             )
-            if not rate:
-                # No rate has been found, trying the search for the reciprocal conversion rate
-                reverse_rate = self.find_rate(
-                    currency=base_currency,
-                    rate_service=rate_service,
-                    key=key,
-                    base_currency=currency,
-                    date_obj=date_obj,
-                    use_forex=True
-                )
-                if reverse_rate and reverse_rate.value:
-                    # Reverse rate exists, store the original rate
-                    rate = Rate.objects.create(
-                        key=key,
-                        value_date=date_obj,
-                        currency=currency,
-                        base_currency=base_currency,
-                        value=1 / reverse_rate.value
-                    )
             return rate
         # Direct connection between rates
         if len(rates) == 2:
-            return Rate.objects.filter(
+            rate = self._query_rate_or_reverse(
                 currency=currency,
+                key=key,
                 base_currency=base_currency,
-                value_date=date_obj
-            ).filter(
-                models.Q(key=key) | models.Q(user__isnull=True)
-            ).order_by('-key').first()
+                date_obj=date_obj
+            )
+            return rate
         else:
             conv_value = 1
             for i in range(len(rates) - 1):
