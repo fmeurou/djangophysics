@@ -232,6 +232,9 @@ class ExpressionSerializer(serializers.Serializer):
         except TokenError:
             self._errors['expression'] = "Invalid expression"
             return False
+        except ZeroDivisionError:
+            self._errors['expression'] = "Division by zero"
+            return False
         if out_units:
             try:
                 result.to(out_units)
