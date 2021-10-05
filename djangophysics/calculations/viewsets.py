@@ -105,12 +105,15 @@ class CalculationView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
         if cp.data:
             errors = calculator.add_data(data=cp.data)
-            if errors:
-                return Response(errors, status=HTTP_400_BAD_REQUEST)
+            # Who cares if there are errors, they'll be notified on conversion
+            # if errors:
+            #     return Response(errors, status=HTTP_400_BAD_REQUEST)
         if cp.eob or not cp.batch_id:
             result = calculator.convert()
+            result.errors.extend(errors)
             serializer = CalculationResultSerializer(result)
-            return Response(serializer.data, content_type="application/json")
+            data = serializer.data
+            return Response(data, content_type="application/json")
         else:
             return Response({'id': calculator.id, 'status': calculator.status},
                             content_type="application/json")

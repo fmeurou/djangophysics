@@ -2,6 +2,7 @@
 Serializers for Calculations module
 """
 import json
+import uuid
 from tokenize import TokenError
 
 import pint
@@ -86,6 +87,7 @@ class ExpressionSerializer(serializers.Serializer):
     """
     unit_system = None
     key = None
+    exp_id = serializers.UUIDField(default=uuid.uuid4)
     expression = serializers.CharField(
         label="Mathematical expression to evaluate",
         required=True,
@@ -313,6 +315,7 @@ class ExpressionSerializer(serializers.Serializer):
             if vs.is_valid():
                 operands.append(vs.create(vs.validated_data))
         return Expression(
+            exp_id=validated_data.get('exp_id', uuid.uuid4()),
             expression=validated_data.get('expression'),
             operands=operands,
             out_units=validated_data.get('out_units')
@@ -324,6 +327,7 @@ class ExpressionSerializer(serializers.Serializer):
         :param instance: Expression object
         :param validated_data: cleaned data
         """
+        instance.exp_id = validated_data.get('exp_id')
         instance.expression = validated_data.get('expression')
         instance.operands = validated_data.get('operands')
         instance.out_units = validated_data.get('out_units')
@@ -334,6 +338,7 @@ class CalculationResultDetailSerializer(serializers.Serializer):
     """
     Serializer for the CalculationResultDetail class
     """
+    exp_id = serializers.UUIDField(label="ID of the expression")
     expression = serializers.CharField(label="Expression to evaluate")
     operands = OperandSerializer(many=True)
     magnitude = serializers.FloatField(label="Magnitude of result")
@@ -353,6 +358,8 @@ class CalculationResultDetailSerializer(serializers.Serializer):
         :param instance: CalculationResultDetail object
         :param validated_data: cleaned data
         """
+        instance.exp_id = validated_data.get(
+            'exp_id', instance.exp_id)
         instance.expression = validated_data.get(
             'expression', instance.expression)
         instance.operands = validated_data.get(
@@ -364,14 +371,25 @@ class CalculationResultDetailSerializer(serializers.Serializer):
         return instance
 
 
+class CalculationResultErrorDetailSerializer(serializers.Serializer):
+    """
+    List of errors in an expression or calculation
+    """
+    source = serializers.CharField(label="Source of the error")
+    error = serializers.CharField(label="Detail of the error")
+
+
 class CalculationResultErrorSerializer(serializers.Serializer):
     """
     Serializer for the CalculationResultError class
     """
+    exp_id =  serializers.UUIDField(label="ID of the expression")
     expression = serializers.CharField(label="Expression to evaluate")
     operands = OperandSerializer(many=True)
     calc_date = serializers.DateField(label="Date of calculation")
-    error = serializers.CharField(label="Error during calculation")
+    errors = CalculationResultErrorDetailSerializer(
+        label="Error during calculation",
+        many=True)
 
     def create(self, validated_data):
         """
@@ -386,14 +404,16 @@ class CalculationResultErrorSerializer(serializers.Serializer):
         :param instance: CalculationResultError object
         :param validated_data: cleaned data
         """
+        instance.exp_id = validated_data.get(
+            'exp_id', instance.exp_id)
         instance.expression = validated_data.get(
             'expression', instance.expression)
         instance.operands = validated_data.get(
             'operands', instance.operands)
         instance.calc_date = validated_data.get(
             'calc_date', instance.calc_date)
-        instance.error = validated_data.get(
-            'error', instance.error)
+        instance.errors = validated_data.get(
+            'errors', instance.errors)
         return instance
 
 

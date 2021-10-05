@@ -3,6 +3,7 @@ Calculations models
 """
 
 import re
+import uuid
 from datetime import date
 
 import pint.systems
@@ -137,6 +138,7 @@ class Expression:
     """
     Expression with operands
     """
+    exp_id = None
     expression = None
     operands = None
     out_units = None
@@ -145,12 +147,14 @@ class Expression:
             self,
             expression: str,
             operands: [Operand],
+            exp_id: str,
             out_units: str = None):
         """
         Initialize Expression
         :param expression: string expression with placeholders
         :param operands: List of Operand corresponding to placeholders
         """
+        self.exp_id = exp_id
         self.expression = expression
         self.operands = operands
         self.out_units = out_units
@@ -195,24 +199,27 @@ class Expression:
                 return False, "Incoherent output dimensions"
         return True, ''
 
-    def validate(self, unit_system: UnitSystem) -> (bool, str):
+    def validate(self, unit_system: UnitSystem) -> (bool, []):
         """
         Validate syntax and homogeneity
         :param unit_system: UnitSystem
         """
+        errors = []
         valid_expression, error = self._validate_syntax(
             unit_system=unit_system
         )
         if not valid_expression:
-            return False, error
+            errors.append({"syntax": error})
         for var in self.operands:
             if not var.validate():
-                return False, "invalid operand"
+                errors.append({"operand": "invalid operand"})
         valid_dimension, error = self._validate_dimension(
             unit_system=unit_system
         )
         if not valid_dimension:
-            return False, error
+            errors.append({"dimension": error})
+        if errors:
+            return False, errors
         return True, ''
 
     def dimensionality(self, unit_system: UnitSystem) -> [Dimensionality]:
@@ -289,6 +296,7 @@ class CalculationResultDetail:
     """
     Details of an evaluation
     """
+    exp_id = None
     expression = None
     operands = None
     magnitude = None
@@ -296,7 +304,8 @@ class CalculationResultDetail:
     unit = None
 
     def __init__(self, expression: str, operands: [],
-                 magnitude: uncertainties.ufloat, unit: str):
+                 magnitude: uncertainties.ufloat, unit: str,
+                 exp_id: str):
         """
         Initialize detail
         :param expression: Expression in the form of a string
@@ -306,6 +315,7 @@ class CalculationResultDetail:
         :param units: dimension of the result
         :param uncertainty: uncertainty of the calculation
         """
+        self.exp_id = exp_id
         self.expression = expression
         self.operands = operands
         self.magnitude = magnitude.n
@@ -317,17 +327,20 @@ class CalculationResultError:
     """
     Error details of a wrong calculation
     """
+    exp_id = None
     expression = None
     operands = None
     calc_date = None
-    error = None
+    errors = None
 
     def __init__(
             self,
             expression: str,
             operands: [],
             calc_date: date,
-            error: str):
+            errors: [],
+            exp_id: str
+    ):
         """
         Initialize error detail
         :param expression: Expression in the form of a string
@@ -335,10 +348,11 @@ class CalculationResultError:
         :param date: date of the evaluation
         :param error: Error description
         """
+        self.exp_id = exp_id
         self.expression = expression
         self.operands = operands
         self.calc_date = calc_date
-        self.error = error
+        self.errors = [{'source': key, 'error': value} for key, value in errors.items()]
 
 
 class CalculationResult:
@@ -432,7 +446,14 @@ class ExpressionCalculator(BaseConverter):
             if serializer.is_valid(unit_system=self.system):
                 self.data.append(serializer.create(serializer.validated_data))
             else:
-                errors.append(serializer.errors)
+                cre = CalculationResultError(
+                    exp_id=line.get('exp_id', ''),
+                    expression=line.get('exp', ''),
+                    operands=line.get('operands'),
+                    calc_date=date.today(),
+                    errors=serializer.errors
+                )
+                errors.append(cre)
         return errors
 
     @classmethod
@@ -472,13 +493,13 @@ class ExpressionCalculator(BaseConverter):
         """
         result = CalculationResult(id=self.id)
         for expression in self.data:
-            valid, exp_error = expression.validate(unit_system=self.system)
+            valid, exp_errors = expression.validate(unit_system=self.system)
             if not valid:
                 error = CalculationResultError(
                     expression=expression.expression,
                     operands=expression.operands,
                     calc_date=date.today(),
-                    error=exp_error
+                    errors=exp_errors
                 )
                 result.errors.append(error)
                 continue
@@ -486,14 +507,16 @@ class ExpressionCalculator(BaseConverter):
                 out = expression.evaluate(unit_system=self.system)
             except ComputationError as e:
                 error = CalculationResultError(
+                    exp_id=expression.exp_id,
                     expression=expression.expression,
                     operands=expression.operands,
                     calc_date=date.today(),
-                    error=str(e)
+                    errors={'source': 'computation', 'error': str(e)}
                 )
                 result.errors.append(error)
                 continue
             detail = CalculationResultDetail(
+                exp_id=expression.exp_id,
                 expression=expression.expression,
                 operands=expression.operands,
                 magnitude=out.magnitude,
