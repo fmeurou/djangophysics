@@ -703,7 +703,7 @@ class ExpressionCalculatorTest(TestCase):
         calculator = ExpressionCalculator(unit_system='SI')
         errors = calculator.add_data(self.trash_expressions)
         self.assertEqual(len(errors), 3)
-        self.assertEqual([list(c.keys())[0] for c in errors],
+        self.assertEqual([c.errors[0].get('source') for c in errors],
                          ['expression', 'expression', 'out_units'])
 
     def test_add_empty_data(self):
