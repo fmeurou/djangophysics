@@ -122,7 +122,7 @@ class UnitSystem:
                 self._load_custom_units(user=user, key=key)
             # Loading currencies with conversion rate at 1 to allow
             # using currencies in calculations
-            self._load_currency_units(redefine=True)
+            self._load_currency_units()
             self._rebuild_cache()
         except (FileNotFoundError, AttributeError) as e:
             raise UnitSystemNotFound(f"Invalid unit system: {str(e)}")
@@ -271,33 +271,38 @@ class UnitSystem:
         """
         available_units = self.available_unit_names()
         added_units = ['EUR']
-        definition = "EUR = [currency]"
-        self.ureg.define(definition)
+        if not redefine:
+            definition = "EUR = [currency]"
+            self.ureg.define(definition)
         # Get available currencies from rate service instead of running
         # through ISO4217 where most currencies are not convertible
-        rate_service = service(
-                service_type='rates',
-                service_name=settings.RATE_SERVICE
-        )
-        print(rate_service.available_currencies())
-        for currency in rate_service.available_currencies():
-            if currency == 'EUR':
-                continue
-            rate = Rate.objects.find_rate(
-                currency=currency,
+        rates = Rate.objects.find_rates(
+                rate_service=settings.RATE_SERVICE,
                 key=self.key,
                 base_currency='EUR',
                 date_obj=self.value_date
             )
-            if rate:
-                definition = f"{currency} = {rate.value} EUR"
-                if currency not in available_units:
-                    self.ureg.define(definition)
-                    added_units.append(currency)
-                elif redefine:
-                    self.ureg._redefine(UnitDefinition.from_string(definition))
-                else:
-                    logging.error(f"{currency} already defined in registry")
+        added_currencies = []
+        for rate in rates:
+            # First check that we have not already added the currency
+            # The list is ordered by key descending, so if there are two values
+            # one with a key and not the other, we only retain the value with
+            # the key
+            if rate.currency in added_currencies:
+                continue
+            # Euro is our base currency
+            if rate.currency == 'EUR':
+                continue
+            definition = f"{rate.currency} = {rate.value} EUR"
+            if rate.currency not in available_units and \
+               rate.currency not in added_units:
+                self.ureg.define(definition)
+                added_units.append(rate.currency)
+            elif redefine and rate.currency not in added_units:
+                self.ureg._redefine(UnitDefinition.from_string(definition))
+                added_units.append(rate.currency)
+            else:
+                logging.error(f"{rate.currency} already defined in registry")
         self._additional_units = self._additional_units | set(added_units)
         return True
 
@@ -334,6 +339,14 @@ class UnitSystem:
         :param alias: other name for unit
         """
         self.ureg.define(f"{code} = {relation}")
+        self._rebuild_cache()
+
+    def update_value_date(self, value_date):
+        """
+        Update the value date and reload currency conversion rates
+        """
+        self.value_date = value_date
+        self._load_currency_units(redefine=True)
         self._rebuild_cache()
 
     @classmethod

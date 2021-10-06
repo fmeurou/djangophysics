@@ -3,10 +3,12 @@ Models for Rates module
 """
 import logging
 from datetime import date, timedelta
+from hashlib import md5
 
 import networkx as nx
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -113,6 +115,12 @@ class RateManager(models.Manager):
                 to_obj=to_obj)
             if not rates:
                 return False
+            for d in range((date_obj - (to_obj or date_obj)).days + 1):
+                RateServiceFetch.objects.create(
+                    service=service_name,
+                    value_date=date_obj + timedelta(d),
+                    fetch_date=date.today()
+                )
         except RatesNotAvailableError as e:
             logging.warning("fetch_rates: Rates not available")
             return False
@@ -232,6 +240,10 @@ class RateManager(models.Manager):
         :param key: Key specific to a client
         :param date_obj: Date to obtain the conversion rate for
         """
+        rate_hash = md5(f"{currency}-{base_currency}-{date_obj.strftime('%Y-%m-d')}-{key}").hexdigest()
+        rate = cache.get(rate_hash)
+        if rate:
+            return rate
         rate = Rate.objects.filter(
             currency=currency,
             base_currency=base_currency,
@@ -255,6 +267,7 @@ class RateManager(models.Manager):
                     base_currency=base_currency,
                     value=1 / reverse_rate.value
                 )
+        cache.set(rate_hash, rate)
         return rate
 
     def find_rate(self, currency: str,
@@ -333,6 +346,35 @@ class RateManager(models.Manager):
                 value=conv_value
             )
             return rate
+
+    def find_rates(self,
+                  rate_service: str = None,
+                  key: str = None,
+                  base_currency: str = settings.BASE_CURRENCY,
+                  date_obj: date = date.today()) -> [BaseRate]:
+        """
+        Fetch all rates for all currencies provided
+         by the rate service to a base currency
+        :param base_currency: base currency code
+        :param key: Key specific to a client
+        :param date_obj: Date to obtain the conversion rate for
+        :param rate_service: Rate service to use
+        """
+        if not RateServiceFetch.objects.filter(
+            service=rate_service,
+            value_date=date_obj
+        ).exists():
+            self.fetch_rates(
+                base_currency=base_currency,
+                rate_service=rate_service,
+                date_obj=date_obj,
+            )
+        return Rate.objects.filter(
+            base_currency=base_currency,
+            value_date=date_obj
+        ).filter(
+            models.Q(key=key) | models.Q(user__isnull=True)
+        ).order_by('-key')
 
 
 class Rate(BaseRate):

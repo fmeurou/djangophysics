@@ -4,6 +4,7 @@ Serializers for Calculations module
 import json
 import uuid
 from tokenize import TokenError
+from datetime import date
 
 import pint
 from rest_framework import serializers
@@ -88,6 +89,10 @@ class ExpressionSerializer(serializers.Serializer):
     unit_system = None
     key = None
     exp_id = serializers.UUIDField(default=uuid.uuid4)
+    value_date = serializers.DateField(
+        label="Date of value for currency conversion",
+        required=False
+    )
     expression = serializers.CharField(
         label="Mathematical expression to evaluate",
         required=True,
@@ -319,6 +324,7 @@ class ExpressionSerializer(serializers.Serializer):
                 operands.append(vs.create(vs.validated_data))
         return Expression(
             exp_id=validated_data.get('exp_id', uuid.uuid4()),
+            value_date=validated_data.get('value_date', date.today()),
             expression=validated_data.get('expression'),
             operands=operands,
             out_units=validated_data.get('out_units')
@@ -331,6 +337,7 @@ class ExpressionSerializer(serializers.Serializer):
         :param validated_data: cleaned data
         """
         instance.exp_id = validated_data.get('exp_id')
+        instance.value_date = validated_data.get('value_date')
         instance.expression = validated_data.get('expression')
         instance.operands = validated_data.get('operands')
         instance.out_units = validated_data.get('out_units')
@@ -342,6 +349,10 @@ class CalculationResultDetailSerializer(serializers.Serializer):
     Serializer for the CalculationResultDetail class
     """
     exp_id = serializers.UUIDField(label="ID of the expression")
+    value_date = serializers.DateField(
+        label="Date of value for currency conversion",
+        required=False
+    )
     expression = serializers.CharField(label="Expression to evaluate")
     operands = OperandSerializer(many=True)
     magnitude = serializers.FloatField(label="Magnitude of result")
@@ -363,6 +374,8 @@ class CalculationResultDetailSerializer(serializers.Serializer):
         """
         instance.exp_id = validated_data.get(
             'exp_id', instance.exp_id)
+        instance.value_date = validated_data.get(
+            'value_date', instance.value_date)
         instance.expression = validated_data.get(
             'expression', instance.expression)
         instance.operands = validated_data.get(
@@ -387,6 +400,10 @@ class CalculationResultErrorSerializer(serializers.Serializer):
     Serializer for the CalculationResultError class
     """
     exp_id =  serializers.UUIDField(label="ID of the expression")
+    value_date = serializers.DateField(
+        label="Date of value for currency conversion",
+        required=False
+    )
     expression = serializers.CharField(label="Expression to evaluate")
     operands = OperandSerializer(many=True)
     calc_date = serializers.DateField(label="Date of calculation")
@@ -422,7 +439,6 @@ class CalculationResultErrorSerializer(serializers.Serializer):
 
 class CalculationResultSerializer(serializers.Serializer):
     id = serializers.UUIDField(label="ID of the batch")
-    value_date = serializers.DateField(label="date of value")
     detail = CalculationResultDetailSerializer(
         label="Details of the calculation", many=True)
     status = serializers.CharField(
@@ -461,10 +477,6 @@ class CalculationPayloadSerializer(serializers.Serializer):
     data = ExpressionSerializer(
         label="Payload of expressions",
         many=True, required=False)
-    value_date = serializers.DateField(
-        label="Date of value for currency conversion",
-        required=False
-    )
     batch_id = serializers.CharField(
         label="User defined ID of the batch of evaluations",
         required=False)
