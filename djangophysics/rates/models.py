@@ -174,11 +174,11 @@ class RateManager(models.Manager):
                 from exc
 
     def _find_rate_or_reverse(self,
-                         currency: str,
-                         rate_service: str = None,
-                         key: str = None,
-                         base_currency: str = settings.BASE_CURRENCY,
-                         date_obj: date = date.today()) -> BaseRate:
+                              currency: str,
+                              rate_service: str = None,
+                              key: str = None,
+                              base_currency: str = settings.BASE_CURRENCY,
+                              date_obj: date = date.today()) -> BaseRate:
         """
         Returns the corresponding rate. 
         If the rate does not exists, it looks for the reverse rate and creates the corresponding rate in the 
@@ -340,11 +340,12 @@ class Rate(BaseRate):
     Class Rate
     """
     user = models.ForeignKey(User, related_name='rates',
-                             on_delete=models.PROTECT, null=True)
+                             on_delete=models.PROTECT, null=True,
+                             db_index=True)
     key = models.CharField("User defined categorization key",
                            max_length=255, default=None,
                            db_index=True, null=True)
-    value_date = models.DateField("Date of value")
+    value_date = models.DateField("Date of value", db_index=True)
     value = models.FloatField("Rate conversion factor", default=0)
     currency = models.CharField("Currency to convert from",
                                 max_length=3, db_index=True)
@@ -359,6 +360,7 @@ class Rate(BaseRate):
         """
         ordering = ['-value_date', ]
         indexes = [
+            models.Index(fields=['user', 'key']),
             models.Index(fields=['base_currency', 'value_date']),
             models.Index(fields=['currency', 'value_date']),
             models.Index(fields=['currency', 'base_currency', 'value_date']),
@@ -617,6 +619,12 @@ class RateConverter(BaseConverter):
                 result.errors.append(error)
         self.end_batch(result.end_batch())
         return result
+
+
+class RateServiceFetch(models.Model):
+    service = models.CharField("name of the rate fetch ing service", max_length=255)
+    value_date = models.DateField("Date of the value that has been fetched")
+    fetch_date = models.DateTimeField("Date of fetching", auto_created=True)
 
 
 def rate_from(

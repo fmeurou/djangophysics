@@ -282,6 +282,9 @@ class ExpressionSerializer(serializers.Serializer):
         except pint.errors.DimensionalityError as e:
             self._errors['out_units'] = f"Incoherent output dimension {str(e)}"
             return None
+        except pint.UndefinedUnitError as e:
+            self._errors['out_units'] = f"Incoherent output units {str(e)}"
+            return None
         return out_units
 
     def operands_validation(self, operands):
@@ -419,6 +422,7 @@ class CalculationResultErrorSerializer(serializers.Serializer):
 
 class CalculationResultSerializer(serializers.Serializer):
     id = serializers.UUIDField(label="ID of the batch")
+    value_date = serializers.DateField(label="date of value")
     detail = CalculationResultDetailSerializer(
         label="Details of the calculation", many=True)
     status = serializers.CharField(
@@ -440,6 +444,7 @@ class CalculationResultSerializer(serializers.Serializer):
         :param validated_data: cleaned data
         """
         instance.id = validated_data.get('id', instance.id)
+        instance.value_date = validated_data.get('value_date', instance.value_date)
         instance.detail = validated_data.get('detail', instance.detail)
         instance.status = validated_data.get('status', instance.status)
         instance.errors = validated_data.get('errors', instance.errors)
@@ -456,6 +461,10 @@ class CalculationPayloadSerializer(serializers.Serializer):
     data = ExpressionSerializer(
         label="Payload of expressions",
         many=True, required=False)
+    value_date = serializers.DateField(
+        label="Date of value for currency conversion",
+        required=False
+    )
     batch_id = serializers.CharField(
         label="User defined ID of the batch of evaluations",
         required=False)
@@ -505,6 +514,7 @@ class CalculationPayloadSerializer(serializers.Serializer):
         :param validated_data: cleaned data
         """
         self.data = validated_data.get('data', instance.data)
+        self.value_date = validated_data.get('value_date', instance.value_date)
         self.unit_system = validated_data.get(
             'unit_system', instance.unit_system)
         self.batch_id = validated_data.get('batch_id', instance.batch_id)

@@ -5,7 +5,6 @@ from datetime import date
 
 from setuptools import setup, find_packages
 
-
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
@@ -72,8 +71,6 @@ setup(
         "pysendfile>=2.0",
         "gunicorn",
         "requests",
-        # "psycopg2",
-        # "mysql",
         "pytz",
         "pycountry",
         "countryinfo>=0.1",
@@ -88,6 +85,11 @@ setup(
         "uncertainties>=3.1",
         "ariadne>=0.13"
     ],
+    extras_require={
+        'mysql': ["mysql", ],
+        'postgres': ['psycopg2',],
+        'develop': ['jupyter', ]
+    },
     packages=find_packages(),
     include_package_data=True,
     classifiers=[

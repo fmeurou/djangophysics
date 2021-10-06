@@ -112,6 +112,8 @@ class ECBService(RateService):
         """
         List availbale currencies for the service
         """
+        if not self._available_currencies:
+            self._read_rates('latest')
         return self._available_currencies
 
     def _get_from_range(self, start_date, end_date):

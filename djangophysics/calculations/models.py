@@ -269,6 +269,7 @@ class CalculationPayload:
     Calculation payload: caculate expressions
     """
     data = None
+    value_date = None
     unit_system = ''
     user = ''
     key = ''
@@ -280,12 +281,14 @@ class CalculationPayload:
             unit_system: UnitSystem,
             key: str = None,
             data: [] = None,
+            value_date: date = date.today(),
             batch_id: str = None,
             eob: bool = False):
         """
         Initialize payload
         """
         self.data = data
+        self.value_date = value_date
         self.unit_system = unit_system
         self.key = key
         self.batch_id = batch_id
@@ -360,12 +363,14 @@ class CalculationResult:
     Result of a batch of evaluations
     """
     id = None
+    value_date = None
     detail = []
     status = None
     errors = []
 
     def __init__(self,
                  id: str = None,
+                 value_date: date = date.today(),
                  detail: [CalculationResultDetail] = None,
                  status: str = BaseConverter.INITIATED_STATUS,
                  errors: [CalculationResultError] = None):
@@ -377,6 +382,7 @@ class CalculationResult:
         :param errors: List of CalculationResultErrors
         """
         self.id = id
+        self.value_date = value_date
         self.detail = detail or []
         self.status = status
         self.errors = errors or []
@@ -403,6 +409,7 @@ class ExpressionCalculator(BaseConverter):
             unit_system: str,
             user: User = None,
             key: str = '',
+            value_date: date = date.today(),
             id: str = None):
         """
         Initiate ExpressionCalculator
@@ -416,10 +423,13 @@ class ExpressionCalculator(BaseConverter):
             self.unit_system = unit_system
             self.user = user
             self.key = key
+            self.value_date = value_date
             self.system = UnitSystem(
                 system_name=unit_system,
                 user=self.user,
-                key=self.key)
+                key=self.key,
+                value_date=self.value_date
+            )
         except UnitSystemNotFound as e:
             raise ExpressionCalculatorInitError from e
 
@@ -461,7 +471,9 @@ class ExpressionCalculator(BaseConverter):
             cls,
             id: str,
             user: User = None,
-            key: str = None) -> BaseConverter:
+            key: str = None,
+            value_date: date = date.today()
+    ) -> BaseConverter:
         """
         Load converter from batch
         :param id: ID of the batch
@@ -473,7 +485,9 @@ class ExpressionCalculator(BaseConverter):
             uc.system = UnitSystem(
                 system_name=uc.unit_system,
                 user=user,
-                key=key)
+                key=key,
+                value_date=value_date
+            )
             return uc
         except (UnitSystemNotFound, KeyError) as e:
             raise ConverterLoadError from e
@@ -491,7 +505,7 @@ class ExpressionCalculator(BaseConverter):
         """
         Converts data to base unit in base system
         """
-        result = CalculationResult(id=self.id)
+        result = CalculationResult(id=self.id, value_date=self.value_date)
         for expression in self.data:
             valid, exp_errors = expression.validate(unit_system=self.system)
             if not valid:

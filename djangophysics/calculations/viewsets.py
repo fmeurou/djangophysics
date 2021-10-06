@@ -92,13 +92,16 @@ class CalculationView(APIView):
             calculator = ExpressionCalculator.load(
                 user=user,
                 key=key,
-                id=cp.batch_id)
+                id=cp.batch_id,
+                value_date=cp.value_date
+            )
         except ConverterLoadError:
             calculator = ExpressionCalculator(
                 id=cp.batch_id,
                 unit_system=cp.unit_system,
                 user=user,
-                key=key
+                key=key,
+                value_date=cp.value_date
             )
         except ExpressionCalculatorInitError:
             return Response("Error initializing calculator",
