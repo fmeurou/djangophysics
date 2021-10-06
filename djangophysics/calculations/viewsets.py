@@ -92,7 +92,8 @@ class CalculationView(APIView):
             calculator = ExpressionCalculator.load(
                 user=user,
                 key=key,
-                id=cp.batch_id)
+                id=cp.batch_id
+            )
         except ConverterLoadError:
             calculator = ExpressionCalculator(
                 id=cp.batch_id,

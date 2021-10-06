@@ -10,10 +10,13 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils.translation import ugettext as _
+from pint.definitions import UnitDefinition
 
+from djangophysics.core.helpers import service
 from djangophysics.converters.models import BaseConverter, ConverterResult, \
     ConverterResultDetail, ConverterResultError, ConverterLoadError
 from djangophysics.countries.models import Country
+from djangophysics.rates.models import Rate
 from . import UNIT_EXTENDED_DEFINITION, DIMENSIONS, \
     UNIT_SYSTEM_BASE_AND_DERIVED_UNITS, \
     ADDITIONAL_BASE_UNITS, PREFIX_SYMBOL
@@ -71,11 +74,14 @@ class UnitSystem:
     units_cache = {}
     user = None
     key = None
+    value_date = None
     _additional_dimensions = set()
 
     def __init__(self, system_name: str = 'SI',
-                 fmt_locale: str = 'en', user: User = None,
-                 key: str = None):
+                 fmt_locale: str = 'en',
+                 user: User = None,
+                 key: str = None,
+                 value_date: date = date.today()):
         """
         Initialize UnitSystem from name and user / key
         information for loading custom units
@@ -88,16 +94,19 @@ class UnitSystem:
         if not found:
             raise UnitSystemNotFound("Invalid unit system")
         self.system_name = system_name
+        # Loading additional dimensions from settings file
         try:
             additional_dimensions_settings = settings.PHYSICS_ADDITIONAL_DIMENSIONS
         except AttributeError:
             additional_dimensions_settings = ADDITIONAL_DIMENSIONS
+        # Loading additional units from settings file
         try:
             additional_units_settings = settings.PHYSICS_ADDITIONAL_UNITS
         except AttributeError:
             additional_units_settings = ADDITIONAL_UNITS
         self.user = user
         self.key = key
+        self.value_date = value_date
         try:
             self.ureg = pint.UnitRegistry(
                 system=system_name,
@@ -107,9 +116,13 @@ class UnitSystem:
                 dimensions=additional_dimensions_settings)
             self._load_additional_units(units=ADDITIONAL_BASE_UNITS)
             self._load_additional_units(units=additional_units_settings)
+            # Loading custom units and dimensions based on a user context
             if user:
                 self._load_custom_dimensions(user=user, key=key)
                 self._load_custom_units(user=user, key=key)
+            # Loading currencies with conversion rate at 1 to allow
+            # using currencies in calculations
+            self._load_currency_units()
             self._rebuild_cache()
         except (FileNotFoundError, AttributeError) as e:
             raise UnitSystemNotFound(f"Invalid unit system: {str(e)}")
@@ -141,8 +154,9 @@ class UnitSystem:
                     f"{key} = {items['relation']}")
                 added_dimensions.append(key)
             elif redefine:
-                self.ureg.redefine(
+                self.ureg._redefine(UnitDefinition.from_string(
                     f"{key} = {items['relation']}")
+                )
         self._additional_dimensions = self._additional_dimensions | \
                                       set(added_dimensions)
         return True
@@ -165,8 +179,9 @@ class UnitSystem:
                     f"{key} = {items['relation']} = {items['symbol']}")
                 added_units.append(key)
             elif redefine:
-                self.ureg.redefine(
+                self.ureg._redefine(UnitDefinition.from_string(
                     f"{key} = {items['relation']} = {items['symbol']}")
+                )
         self._additional_units = self._additional_units | set(added_units)
         return True
 
@@ -200,7 +215,7 @@ class UnitSystem:
                 self.ureg.define(definition)
                 added_dimensions.append(cd['code'])
             elif redefine:
-                self.ureg.redefine(definition)
+                self.ureg._redefine(UnitDefinition.from_string(definition))
             else:
                 logging.error(f"{cd['code']} already defined in registry")
         self._additional_dimensions = self._additional_dimensions | \
@@ -241,9 +256,53 @@ class UnitSystem:
                 self.ureg.define(definition)
                 added_units.append(cu['code'])
             elif redefine:
-                self.ureg.redefine(definition)
+                self.ureg._redefine(UnitDefinition.from_string(definition))
             else:
                 logging.error(f"{cu['code']} already defined in registry")
+        self._additional_units = self._additional_units | set(added_units)
+        return True
+
+    def _load_currency_units(
+            self,
+            redefine: bool = False) -> bool:
+        """
+        Load units with ISO4217 codes to allow unit conversions at value_date.
+        All values are related to EUR
+        """
+        available_units = self.available_unit_names()
+        added_units = ['EUR']
+        if not redefine:
+            definition = "EUR = [currency]"
+            self.ureg.define(definition)
+        # Get available currencies from rate service instead of running
+        # through ISO4217 where most currencies are not convertible
+        rates = Rate.objects.find_rates(
+                rate_service=settings.RATE_SERVICE,
+                key=self.key,
+                base_currency='EUR',
+                date_obj=self.value_date
+            )
+        added_currencies = []
+        for rate in rates:
+            # First check that we have not already added the currency
+            # The list is ordered by key descending, so if there are two values
+            # one with a key and not the other, we only retain the value with
+            # the key
+            if rate.currency in added_currencies:
+                continue
+            # Euro is our base currency
+            if rate.currency == 'EUR':
+                continue
+            definition = f"{rate.currency} = {rate.value} EUR"
+            if rate.currency not in available_units and \
+               rate.currency not in added_units:
+                self.ureg.define(definition)
+                added_units.append(rate.currency)
+            elif redefine and rate.currency not in added_units:
+                self.ureg._redefine(UnitDefinition.from_string(definition))
+                added_units.append(rate.currency)
+            else:
+                logging.error(f"{rate.currency} already defined in registry")
         self._additional_units = self._additional_units | set(added_units)
         return True
 
@@ -282,6 +341,14 @@ class UnitSystem:
         self.ureg.define(f"{code} = {relation}")
         self._rebuild_cache()
 
+    def update_value_date(self, value_date):
+        """
+        Update the value date and reload currency conversion rates
+        """
+        self.value_date = value_date
+        self._load_currency_units(redefine=True)
+        self._rebuild_cache()
+
     @classmethod
     def available_systems(cls) -> [str]:
         """
@@ -297,8 +364,7 @@ class UnitSystem:
         Check validity of the UnitSystem
         :param system: name of the unit system
         """
-        us = cls()
-        return system in us.available_systems()
+        return system in cls.available_systems()
 
     def current_system(self) -> pint.UnitRegistry:
         """
@@ -955,6 +1021,7 @@ class UnitConversionPayload:
     Unit conversion payload
     """
     data = None
+    value_date = None
     base_system = ''
     base_unit = ''
     key = ''
@@ -964,7 +1031,8 @@ class UnitConversionPayload:
     def __init__(self,
                  base_system: UnitSystem,
                  base_unit: Unit,
-                 data=None,
+                 value_date: date = date.today,
+                 data = None,
                  key: str = None,
                  batch_id: str = None,
                  eob: bool = False):
@@ -972,6 +1040,7 @@ class UnitConversionPayload:
         Initialize conversion payload
         """
         self.data = data
+        self.value_date = value_date
         self.base_system = base_system
         self.base_unit = base_unit
         self.key = key
@@ -1026,7 +1095,9 @@ class CustomDimension(models.Model):
         dims = {}
         us = UnitSystem(system_name=self.unit_system,
                         user=self.user,
-                        key=self.key)
+                        key=self.key,
+                        value_date=self.value_date
+                        )
         for dim_name in re.findall('(?P<dim>\[\w+\])', self.relation):
             try:
                 dim = Dimension(unit_system=us, code=dim_name)
@@ -1051,7 +1122,8 @@ class CustomDimension(models.Model):
         us = UnitSystem(
             system_name=self.unit_system,
             user=self.user,
-            key=self.key
+            key=self.key,
+            value_date=self.value_date
         )
         self.code = self.code.replace('-', '_')
         if self.code[0] != '[':
