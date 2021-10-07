@@ -3,6 +3,7 @@ Units tests
 """
 import json
 import uuid
+from datetime import date, timedelta
 
 import pint
 from django.core.cache import cache
@@ -536,8 +537,12 @@ class ExpressionCalculatorTest(TestCase):
         """
         self.calculator = ExpressionCalculator(unit_system='SI')
         self.unit_system = UnitSystem(system_name='SI')
+        self.exp_id = uuid.uuid4()
+        self.today_id = uuid.uuid4()
+        self.last_week_id = uuid.uuid4()
         self.expressions = [
             {
+                'exp_id': self.exp_id,
                 'expression': "3*{a}+15*{b}",
                 'operands': [
                     {
@@ -571,7 +576,32 @@ class ExpressionCalculatorTest(TestCase):
                         "unit": "mg"
                     },
                 ]
-            }
+            },
+            {
+                'exp_id': self.today_id,
+                'expression': "{a}",
+                'operands': [
+                    {
+                        "name": "a",
+                        "value": 1,
+                        "unit": "USD"
+                    }
+                ],
+                'out_units': 'EUR'
+            },
+            {
+                'exp_id': self.last_week_id,
+                'expression': "{a}",
+                'value_date': date.today() - timedelta(7),
+                'operands': [
+                    {
+                        "name": "a",
+                        "value": 1,
+                        "unit": "USD"
+                    }
+                ],
+                'out_units': 'EUR'
+            },
         ]
         self.expression_to_unit = [
             {
@@ -614,6 +644,7 @@ class ExpressionCalculatorTest(TestCase):
         ]
         self.trash_expressions = [
             {
+                'exp_id': self.exp_id,
                 'expression': "3*{a}+15*{b}+",
                 'operands': [
                     {
@@ -703,6 +734,11 @@ class ExpressionCalculatorTest(TestCase):
         calculator = ExpressionCalculator(unit_system='SI')
         errors = calculator.add_data(self.trash_expressions)
         self.assertEqual(len(errors), 3)
+        # Can I find my ID in the results
+        self.assertIn(self.exp_id, [e.exp_id for e in errors])
+        # Check the value_date
+        self.assertIn(date.today(), [e.value_date for e in errors])
+        # Are errors expected
         self.assertEqual([c.errors[0].get('source') for c in errors],
                          ['expression', 'expression', 'out_units'])
 
@@ -724,6 +760,18 @@ class ExpressionCalculatorTest(TestCase):
         self.assertEqual(self.calculator.status, self.calculator.FINISHED)
         self.assertEqual(len(result.errors), 0)
         self.assertEqual(len(result.detail), len(self.calculator.data))
+        # Check that expression with exp_id is there
+        self.assertEqual(len([d for d in result.detail if d.exp_id == self.exp_id]), 1)
+        # Check that expressions with value date equals to today is present
+        self.assertEqual(
+            len([d for d in result.detail if d.exp_id == self.today_id]), 1)
+        # Check that expressions with value date equals to last week is present
+        self.assertEqual(
+            len([d for d in result.detail if d.value_date == (date.today() - timedelta(7))]), 1)
+        self.assertNotEqual(
+            [d for d in result.detail if d.exp_id == self.today_id][0].magnitude,
+            [d for d in result.detail if d.value_date == (date.today() - timedelta(7))][0].magnitude
+        )
 
     def test_computation_and_conversion(self):
         """
