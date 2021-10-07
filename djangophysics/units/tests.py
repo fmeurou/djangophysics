@@ -218,7 +218,8 @@ class UnitAPITest(TestCase):
             }
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json()[0]['code'], 'K_alpha_Cu_d_220')
+        # Currencies are now part of the dimensions
+        self.assertEqual(response.json()[0]['code'], 'AUD')
 
     def test_list_language_request(self):
         """

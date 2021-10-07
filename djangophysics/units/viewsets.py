@@ -27,7 +27,7 @@ from djangophysics.core.pagination import PageNumberPagination
 from . import DIMENSIONS
 from .settings import DOMAINS
 from .exceptions import UnitConverterInitError, UnitSystemNotFound, \
-    UnitNotFound, DimensionNotFound, UnitValueError
+    UnitNotFound, DimensionNotFound, UnitValueError, DimensionDimensionError
 from .filters import CustomUnitFilter, CustomDimensionFilter
 from .forms import CustomUnitForm, CustomDimensionForm
 from .models import UnitSystem, UnitConverter, Dimension, CustomUnit, \

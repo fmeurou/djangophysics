@@ -1095,8 +1095,7 @@ class CustomDimension(models.Model):
         dims = {}
         us = UnitSystem(system_name=self.unit_system,
                         user=self.user,
-                        key=self.key,
-                        value_date=self.value_date
+                        key=self.key
                         )
         for dim_name in re.findall('(?P<dim>\[\w+\])', self.relation):
             try:
@@ -1123,7 +1122,6 @@ class CustomDimension(models.Model):
             system_name=self.unit_system,
             user=self.user,
             key=self.key,
-            value_date=self.value_date
         )
         self.code = self.code.replace('-', '_')
         if self.code[0] != '[':

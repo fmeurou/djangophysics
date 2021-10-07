@@ -240,7 +240,9 @@ class RateManager(models.Manager):
         :param key: Key specific to a client
         :param date_obj: Date to obtain the conversion rate for
         """
-        rate_hash = md5(f"{currency}-{base_currency}-{date_obj.strftime('%Y-%m-d')}-{key}").hexdigest()
+        rate_hash = md5(
+            f"{currency}-{base_currency}-{date_obj.strftime('%Y-%m-d')}-{key}".encode('latin1')
+        ).hexdigest()
         rate = cache.get(rate_hash)
         if rate:
             return rate
