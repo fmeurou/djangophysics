@@ -5,6 +5,7 @@ Calculations models
 import re
 import uuid
 from datetime import date
+from itertools import groupby
 
 import pint.systems
 import uncertainties
@@ -139,6 +140,7 @@ class Expression:
     Expression with operands
     """
     exp_id = None
+    value_date = None
     expression = None
     operands = None
     out_units = None
@@ -148,6 +150,7 @@ class Expression:
             expression: str,
             operands: [Operand],
             exp_id: str,
+            value_date: date = date.today(),
             out_units: str = None):
         """
         Initialize Expression
@@ -155,6 +158,7 @@ class Expression:
         :param operands: List of Operand corresponding to placeholders
         """
         self.exp_id = exp_id
+        self.value_date = value_date
         self.expression = expression
         self.operands = operands
         self.out_units = out_units
@@ -269,6 +273,7 @@ class CalculationPayload:
     Calculation payload: caculate expressions
     """
     data = None
+    value_date = None
     unit_system = ''
     user = ''
     key = ''
@@ -280,12 +285,14 @@ class CalculationPayload:
             unit_system: UnitSystem,
             key: str = None,
             data: [] = None,
+            value_date: date = date.today(),
             batch_id: str = None,
             eob: bool = False):
         """
         Initialize payload
         """
         self.data = data
+        self.value_date = value_date
         self.unit_system = unit_system
         self.key = key
         self.batch_id = batch_id
@@ -297,6 +304,7 @@ class CalculationResultDetail:
     Details of an evaluation
     """
     exp_id = None
+    value_date = None
     expression = None
     operands = None
     magnitude = None
@@ -305,7 +313,7 @@ class CalculationResultDetail:
 
     def __init__(self, expression: str, operands: [],
                  magnitude: uncertainties.ufloat, unit: str,
-                 exp_id: str):
+                 exp_id: str, value_date: date):
         """
         Initialize detail
         :param expression: Expression in the form of a string
@@ -316,6 +324,7 @@ class CalculationResultDetail:
         :param uncertainty: uncertainty of the calculation
         """
         self.exp_id = exp_id
+        self.value_date = value_date
         self.expression = expression
         self.operands = operands
         self.magnitude = magnitude.n
@@ -328,6 +337,7 @@ class CalculationResultError:
     Error details of a wrong calculation
     """
     exp_id = None
+    value_date = None
     expression = None
     operands = None
     calc_date = None
@@ -339,7 +349,8 @@ class CalculationResultError:
             operands: [],
             calc_date: date,
             errors: [],
-            exp_id: str
+            exp_id: str,
+            value_date: date = date.today()
     ):
         """
         Initialize error detail
@@ -347,8 +358,11 @@ class CalculationResultError:
         :param operands: List of Operands
         :param date: date of the evaluation
         :param error: Error description
+        :param exp_id: Optional expression ID
+        :param value_date: Date of value in case of currency conversion
         """
         self.exp_id = exp_id
+        self.value_date = value_date
         self.expression = expression
         self.operands = operands
         self.calc_date = calc_date
@@ -419,7 +433,8 @@ class ExpressionCalculator(BaseConverter):
             self.system = UnitSystem(
                 system_name=unit_system,
                 user=self.user,
-                key=self.key)
+                key=self.key,
+            )
         except UnitSystemNotFound as e:
             raise ExpressionCalculatorInitError from e
 
@@ -461,7 +476,8 @@ class ExpressionCalculator(BaseConverter):
             cls,
             id: str,
             user: User = None,
-            key: str = None) -> BaseConverter:
+            key: str = None,
+    ) -> BaseConverter:
         """
         Load converter from batch
         :param id: ID of the batch
@@ -473,7 +489,8 @@ class ExpressionCalculator(BaseConverter):
             uc.system = UnitSystem(
                 system_name=uc.unit_system,
                 user=user,
-                key=key)
+                key=key,
+            )
             return uc
         except (UnitSystemNotFound, KeyError) as e:
             raise ConverterLoadError from e
@@ -492,36 +509,46 @@ class ExpressionCalculator(BaseConverter):
         Converts data to base unit in base system
         """
         result = CalculationResult(id=self.id)
-        for expression in self.data:
-            valid, exp_errors = expression.validate(unit_system=self.system)
-            if not valid:
-                error = CalculationResultError(
-                    expression=expression.expression,
-                    operands=expression.operands,
-                    calc_date=date.today(),
-                    errors=exp_errors
-                )
-                result.errors.append(error)
-                continue
-            try:
-                out = expression.evaluate(unit_system=self.system)
-            except ComputationError as e:
-                error = CalculationResultError(
+        for value_date, expressions in groupby(
+                self.data,
+                key=lambda x: x.value_date
+        ):
+            self.system.update_value_date(value_date)
+            for expression in expressions:
+                valid, exp_errors = expression.validate(unit_system=self.system)
+                if not valid:
+                    error = CalculationResultError(
+                        exp_id=expression.exp_id,
+                        value_date=expression.value_date,
+                        expression=expression.expression,
+                        operands=expression.operands,
+                        calc_date=date.today(),
+                        errors=exp_errors
+                    )
+                    result.errors.append(error)
+                    continue
+                try:
+                    self.system.update_value_date(expression.value_date)
+                    out = expression.evaluate(unit_system=self.system)
+                except ComputationError as e:
+                    error = CalculationResultError(
+                        exp_id=expression.exp_id,
+                        value_date=expression.value_date,
+                        expression=expression.expression,
+                        operands=expression.operands,
+                        calc_date=date.today(),
+                        errors={'source': 'computation', 'error': str(e)}
+                    )
+                    result.errors.append(error)
+                    continue
+                detail = CalculationResultDetail(
                     exp_id=expression.exp_id,
+                    value_date=expression.value_date,
                     expression=expression.expression,
                     operands=expression.operands,
-                    calc_date=date.today(),
-                    errors={'source': 'computation', 'error': str(e)}
+                    magnitude=out.magnitude,
+                    unit=out.units
                 )
-                result.errors.append(error)
-                continue
-            detail = CalculationResultDetail(
-                exp_id=expression.exp_id,
-                expression=expression.expression,
-                operands=expression.operands,
-                magnitude=out.magnitude,
-                unit=out.units
-            )
-            result.detail.append(detail)
+                result.detail.append(detail)
         self.end_batch(result.end_batch())
         return result

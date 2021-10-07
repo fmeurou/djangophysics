@@ -3,10 +3,12 @@ Models for Rates module
 """
 import logging
 from datetime import date, timedelta
+from hashlib import md5
 
 import networkx as nx
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -113,6 +115,12 @@ class RateManager(models.Manager):
                 to_obj=to_obj)
             if not rates:
                 return False
+            for d in range((date_obj - (to_obj or date_obj)).days + 1):
+                RateServiceFetch.objects.create(
+                    service=service_name,
+                    value_date=date_obj + timedelta(d),
+                    fetch_date=date.today()
+                )
         except RatesNotAvailableError as e:
             logging.warning("fetch_rates: Rates not available")
             return False
@@ -174,11 +182,11 @@ class RateManager(models.Manager):
                 from exc
 
     def _find_rate_or_reverse(self,
-                         currency: str,
-                         rate_service: str = None,
-                         key: str = None,
-                         base_currency: str = settings.BASE_CURRENCY,
-                         date_obj: date = date.today()) -> BaseRate:
+                              currency: str,
+                              rate_service: str = None,
+                              key: str = None,
+                              base_currency: str = settings.BASE_CURRENCY,
+                              date_obj: date = date.today()) -> BaseRate:
         """
         Returns the corresponding rate. 
         If the rate does not exists, it looks for the reverse rate and creates the corresponding rate in the 
@@ -232,6 +240,10 @@ class RateManager(models.Manager):
         :param key: Key specific to a client
         :param date_obj: Date to obtain the conversion rate for
         """
+        rate_hash = md5(f"{currency}-{base_currency}-{date_obj.strftime('%Y-%m-d')}-{key}").hexdigest()
+        rate = cache.get(rate_hash)
+        if rate:
+            return rate
         rate = Rate.objects.filter(
             currency=currency,
             base_currency=base_currency,
@@ -255,6 +267,7 @@ class RateManager(models.Manager):
                     base_currency=base_currency,
                     value=1 / reverse_rate.value
                 )
+        cache.set(rate_hash, rate)
         return rate
 
     def find_rate(self, currency: str,
@@ -334,17 +347,47 @@ class RateManager(models.Manager):
             )
             return rate
 
+    def find_rates(self,
+                  rate_service: str = None,
+                  key: str = None,
+                  base_currency: str = settings.BASE_CURRENCY,
+                  date_obj: date = date.today()) -> [BaseRate]:
+        """
+        Fetch all rates for all currencies provided
+         by the rate service to a base currency
+        :param base_currency: base currency code
+        :param key: Key specific to a client
+        :param date_obj: Date to obtain the conversion rate for
+        :param rate_service: Rate service to use
+        """
+        if not RateServiceFetch.objects.filter(
+            service=rate_service,
+            value_date=date_obj
+        ).exists():
+            self.fetch_rates(
+                base_currency=base_currency,
+                rate_service=rate_service,
+                date_obj=date_obj,
+            )
+        return Rate.objects.filter(
+            base_currency=base_currency,
+            value_date=date_obj
+        ).filter(
+            models.Q(key=key) | models.Q(user__isnull=True)
+        ).order_by('-key')
+
 
 class Rate(BaseRate):
     """
     Class Rate
     """
     user = models.ForeignKey(User, related_name='rates',
-                             on_delete=models.PROTECT, null=True)
+                             on_delete=models.PROTECT, null=True,
+                             db_index=True)
     key = models.CharField("User defined categorization key",
                            max_length=255, default=None,
                            db_index=True, null=True)
-    value_date = models.DateField("Date of value")
+    value_date = models.DateField("Date of value", db_index=True)
     value = models.FloatField("Rate conversion factor", default=0)
     currency = models.CharField("Currency to convert from",
                                 max_length=3, db_index=True)
@@ -359,6 +402,7 @@ class Rate(BaseRate):
         """
         ordering = ['-value_date', ]
         indexes = [
+            models.Index(fields=['user', 'key']),
             models.Index(fields=['base_currency', 'value_date']),
             models.Index(fields=['currency', 'value_date']),
             models.Index(fields=['currency', 'base_currency', 'value_date']),
@@ -617,6 +661,12 @@ class RateConverter(BaseConverter):
                 result.errors.append(error)
         self.end_batch(result.end_batch())
         return result
+
+
+class RateServiceFetch(models.Model):
+    service = models.CharField("name of the rate fetch ing service", max_length=255)
+    value_date = models.DateField("Date of the value that has been fetched")
+    fetch_date = models.DateTimeField("Date of fetching", auto_created=True)
 
 
 def rate_from(

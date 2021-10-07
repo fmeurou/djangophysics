@@ -176,6 +176,10 @@ class UnitConversionPayloadSerializer(serializers.Serializer):
     base_unit = serializers.CharField(
         label="Unit to express the result in",
         required=True)
+    value_date = serializers.DateField(
+        label="Value date for currency conversion, defaults to today",
+        required=False
+    )
     batch_id = serializers.CharField(
         label="User defined batch ID",
         required=False)
@@ -241,6 +245,7 @@ class UnitConversionPayloadSerializer(serializers.Serializer):
         :param validated_data: cleaned data
         """
         self.data = validated_data.get('data', instance.data)
+        self.value_date = validated_data.get('data', instance.value_date)
         self.base_system = validated_data.get(
             'base_system',
             instance.base_system)

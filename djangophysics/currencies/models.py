@@ -141,8 +141,8 @@ class Currency:
         qs = Rate.objects.filter(currency=self.code)
         if user:
             qs = qs.filter(models.Q(user=user) | models.Q(user=None))
-        if key:
-            qs = qs.filter(key=key)
+            if key:
+                qs = qs.filter(key=key)
         if base_currency:
             qs = qs.filter(base_currency=base_currency)
         if start_date:

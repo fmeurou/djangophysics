@@ -4,6 +4,7 @@ Serializers for Calculations module
 import json
 import uuid
 from tokenize import TokenError
+from datetime import date
 
 import pint
 from rest_framework import serializers
@@ -88,6 +89,10 @@ class ExpressionSerializer(serializers.Serializer):
     unit_system = None
     key = None
     exp_id = serializers.UUIDField(default=uuid.uuid4)
+    value_date = serializers.DateField(
+        label="Date of value for currency conversion",
+        required=False
+    )
     expression = serializers.CharField(
         label="Mathematical expression to evaluate",
         required=True,
@@ -282,6 +287,9 @@ class ExpressionSerializer(serializers.Serializer):
         except pint.errors.DimensionalityError as e:
             self._errors['out_units'] = f"Incoherent output dimension {str(e)}"
             return None
+        except pint.UndefinedUnitError as e:
+            self._errors['out_units'] = f"Incoherent output units {str(e)}"
+            return None
         return out_units
 
     def operands_validation(self, operands):
@@ -316,6 +324,7 @@ class ExpressionSerializer(serializers.Serializer):
                 operands.append(vs.create(vs.validated_data))
         return Expression(
             exp_id=validated_data.get('exp_id', uuid.uuid4()),
+            value_date=validated_data.get('value_date', date.today()),
             expression=validated_data.get('expression'),
             operands=operands,
             out_units=validated_data.get('out_units')
@@ -328,6 +337,7 @@ class ExpressionSerializer(serializers.Serializer):
         :param validated_data: cleaned data
         """
         instance.exp_id = validated_data.get('exp_id')
+        instance.value_date = validated_data.get('value_date')
         instance.expression = validated_data.get('expression')
         instance.operands = validated_data.get('operands')
         instance.out_units = validated_data.get('out_units')
@@ -339,6 +349,10 @@ class CalculationResultDetailSerializer(serializers.Serializer):
     Serializer for the CalculationResultDetail class
     """
     exp_id = serializers.UUIDField(label="ID of the expression")
+    value_date = serializers.DateField(
+        label="Date of value for currency conversion",
+        required=False
+    )
     expression = serializers.CharField(label="Expression to evaluate")
     operands = OperandSerializer(many=True)
     magnitude = serializers.FloatField(label="Magnitude of result")
@@ -360,6 +374,8 @@ class CalculationResultDetailSerializer(serializers.Serializer):
         """
         instance.exp_id = validated_data.get(
             'exp_id', instance.exp_id)
+        instance.value_date = validated_data.get(
+            'value_date', instance.value_date)
         instance.expression = validated_data.get(
             'expression', instance.expression)
         instance.operands = validated_data.get(
@@ -384,6 +400,10 @@ class CalculationResultErrorSerializer(serializers.Serializer):
     Serializer for the CalculationResultError class
     """
     exp_id =  serializers.UUIDField(label="ID of the expression")
+    value_date = serializers.DateField(
+        label="Date of value for currency conversion",
+        required=False
+    )
     expression = serializers.CharField(label="Expression to evaluate")
     operands = OperandSerializer(many=True)
     calc_date = serializers.DateField(label="Date of calculation")
@@ -440,6 +460,7 @@ class CalculationResultSerializer(serializers.Serializer):
         :param validated_data: cleaned data
         """
         instance.id = validated_data.get('id', instance.id)
+        instance.value_date = validated_data.get('value_date', instance.value_date)
         instance.detail = validated_data.get('detail', instance.detail)
         instance.status = validated_data.get('status', instance.status)
         instance.errors = validated_data.get('errors', instance.errors)
@@ -505,6 +526,7 @@ class CalculationPayloadSerializer(serializers.Serializer):
         :param validated_data: cleaned data
         """
         self.data = validated_data.get('data', instance.data)
+        self.value_date = validated_data.get('value_date', instance.value_date)
         self.unit_system = validated_data.get(
             'unit_system', instance.unit_system)
         self.batch_id = validated_data.get('batch_id', instance.batch_id)
