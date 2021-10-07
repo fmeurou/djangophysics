@@ -1,6 +1,7 @@
 """
 Models for Rates module
 """
+import datetime
 import logging
 from datetime import date, timedelta
 from hashlib import md5
@@ -681,10 +682,18 @@ def rate_from(
     Return rate at a given date
     Used for extension of Currency without user context for GraphQL interface
     """
+    if type(value_date) == str:
+        date_obj = datetime.datetime.strptime(value_date, '%Y-%m-%d').date()
+    elif type(value_date) == date:
+        date_obj = value_date
+    elif type(value_date) == datetime:
+        date_obj = value_date.date()
+    else:
+        raise ValueError('Invalid date format')
     return Rate.objects.find_rate(
         currency=self.code,
         base_currency=currency,
-        date_obj=value_date)
+        date_obj=date_obj)
 
 
 def rate_to(
@@ -697,10 +706,18 @@ def rate_to(
     Return rate at a given date
     Used for extension of Currency without user context for GraphQL interface
     """
+    if type(value_date) == str:
+        date_obj = datetime.datetime.strptime(value_date, '%Y-%m-%d').date()
+    elif type(value_date) == date:
+        date_obj = value_date
+    elif type(value_date) == datetime:
+        date_obj = value_date.date()
+    else:
+        raise ValueError('Invalid date format')
     return Rate.objects.find_rate(
         base_currency=self.code,
         currency=currency,
-        date_obj=value_date)
+        date_obj=date_obj)
 
 
 # Add rates attribute from Currency class

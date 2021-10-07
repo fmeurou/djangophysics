@@ -1,6 +1,8 @@
 """
 Djangophysics GraphQL schemas
 """
+from datetime import datetime, date
+
 from ariadne import QueryType, gql, make_executable_schema
 
 from ..core.helpers import validate_language, service
@@ -384,10 +386,11 @@ def resolve_rate(_, info,
     :param currency: currency  ISO4217 code
     :param value_date: date of value for the rate "YYYY-MM-DD"
     """
+    date_obj = datetime.strptime(value_date, '%Y-%m-%d').date()
     rate = Rate.objects.find_rate(
         base_currency=base_currency.upper(),
         currency=currency.upper(),
-        date_obj=value_date
+        date_obj=date_obj
     )
     return rate
 
@@ -417,7 +420,8 @@ def resolve_rates_page(_, info,
     if base_currency:
         rates = rates.filter(base_currency=base_currency)
     if value_date:
-        rates = rates.filter(value_date=value_date)
+        date_obj = datetime.strptime(value_date, '%Y-%m-%d').date()
+        rates = rates.filter(value_date=date_obj)
     cnt = rates.count()
     rates = rates[page * page_size: (page + 1) * page_size]
     return {
