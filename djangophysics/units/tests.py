@@ -2,6 +2,7 @@
 Units tests
 """
 import uuid
+from datetime import date, timedelta
 
 import pint
 from django.conf import settings
@@ -398,6 +399,11 @@ class UnitSystemTest(TestCase):
         """
         Setup test environment
         """
+        self.user = User.objects.create(
+            username='toto',
+            email='toto@example.com'
+        )
+        self.key = uuid.uuid4()
         self.old_setting = getattr(settings, 'ADDITIONAL_UNITS', {})
         settings.PHYSICS_ADDITIONAL_UNITS = {
             'SI': {
@@ -413,6 +419,16 @@ class UnitSystemTest(TestCase):
                 }
             }
         }  # value tested against in the TestCase
+        self.custom_unit = CustomUnit.objects.create(
+            user=self.user,
+            key=self.key,
+            unit_system='SI',
+            code='myUserUnit',
+            name='My User Unit',
+            relation='12 kg',
+            symbol='myuu',
+            alias='myuserunit'
+        )
 
     def tearDown(self):
         """
@@ -429,6 +445,20 @@ class UnitSystemTest(TestCase):
         self.assertEqual(
             available_systems,
             ['Planck', 'SI', 'US', 'atomic', 'cgs', 'imperial', 'mks'])
+
+    def test_user_key_system(self):
+        user_us = UnitSystem(system_name='SI', user=self.user, key=self.key)
+        self.assertIsNotNone(user_us.unit('myUserUnit'))
+        us = UnitSystem(system_name='SI')
+        self.assertIsNone(us.unit('myUserUnit'))
+
+    def test_value_date_system(self):
+        today_us = UnitSystem(system_name='SI')
+        last_week_us = UnitSystem(system_name='SI', value_date=date.today() - timedelta(7))
+        self.assertNotEqual(
+            today_us.ureg.Quantity(1, 'USD').to('EUR'),
+            last_week_us.ureg.Quantity(1, 'USD').to('EUR'),
+        )
 
     def test_available_units(self):
         """
