@@ -13,6 +13,7 @@ from sympy import sympify, SympifyError
 from djangophysics.units.models import UnitSystem
 from .models import Expression, CalculationPayload, Operand, \
     CalculationResult, CalculationResultError, CalculationResultDetail
+from djangophysics.core.helpers import uuid4_str
 
 
 class OperandSerializer(serializers.Serializer):
@@ -88,7 +89,7 @@ class ExpressionSerializer(serializers.Serializer):
     """
     unit_system = None
     key = None
-    exp_id = serializers.UUIDField(default=uuid.uuid4)
+    exp_id = serializers.CharField(default=uuid4_str)
     value_date = serializers.DateField(
         label="Date of value for currency conversion",
         required=False
@@ -348,7 +349,7 @@ class CalculationResultDetailSerializer(serializers.Serializer):
     """
     Serializer for the CalculationResultDetail class
     """
-    exp_id = serializers.UUIDField(label="ID of the expression")
+    exp_id = serializers.CharField(label="ID of the expression")
     value_date = serializers.DateField(
         label="Date of value for currency conversion",
         required=False
@@ -399,7 +400,7 @@ class CalculationResultErrorSerializer(serializers.Serializer):
     """
     Serializer for the CalculationResultError class
     """
-    exp_id =  serializers.UUIDField(label="ID of the expression")
+    exp_id =  serializers.CharField(label="ID of the expression")
     value_date = serializers.DateField(
         label="Date of value for currency conversion",
         required=False

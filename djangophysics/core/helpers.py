@@ -2,6 +2,7 @@
 Core helpers
 """
 import logging
+import uuid
 from importlib import import_module
 
 from django.apps import apps
@@ -39,3 +40,7 @@ def validate_language(lang):
     if lang in [language[0] for language in settings.LANGUAGES]:
         return lang
     return 'en'
+
+
+def uuid4_str():
+    return str(uuid.uuid4())
