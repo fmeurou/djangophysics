@@ -537,9 +537,9 @@ class ExpressionCalculatorTest(TestCase):
         """
         self.calculator = ExpressionCalculator(unit_system='SI')
         self.unit_system = UnitSystem(system_name='SI')
-        self.exp_id = uuid.uuid4()
-        self.today_id = uuid.uuid4()
-        self.last_week_id = uuid.uuid4()
+        self.exp_id = str(uuid.uuid4())
+        self.today_id = str(uuid.uuid4())
+        self.last_week_id = str(uuid.uuid4())
         self.expressions = [
             {
                 'exp_id': self.exp_id,
