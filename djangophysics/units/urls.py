@@ -2,8 +2,7 @@
 Units module URLs
 """
 
-from django.conf.urls import url, include
-from django.urls import path
+from django.urls import path, re_path, include
 from rest_framework import routers
 
 from .viewsets import UnitSystemViewset, UnitViewset, \
@@ -28,5 +27,5 @@ urlpatterns = [
     path('convert/', ConvertView.as_view()),
     path('<str:unit_system>/formulas/validate/', ValidateViewSet.as_view()),
     path('<str:unit_system>/formulas/calculate/', CalculationView.as_view()),
-    url(r'^', include(router.urls)),
+    re_path(r'^', include(router.urls)),
 ]

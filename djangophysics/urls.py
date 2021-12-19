@@ -13,8 +13,7 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.conf.urls import url, include
-from django.urls import path
+from django.urls import path, re_path, include
 
 from .calculations import urls as calculations_url
 from .converters.views import WatchView
@@ -29,5 +28,5 @@ urlpatterns = [
     path('rates/', include(rate_urls)),
     path('units/', include(unit_urls)),
     path('calculations/', include(calculations_url)),
-    url(r'^watch/(?P<converter_id>[0-9a-f-]{36})/$', WatchView.as_view()),
+    re_path(r'^watch/(?P<converter_id>[0-9a-f-]{36})/$', WatchView.as_view()),
 ]

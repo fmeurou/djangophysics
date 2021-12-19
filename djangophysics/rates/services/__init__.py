@@ -1,7 +1,6 @@
 """
 Rates services
 """
-from collections import Iterator
 
 from datetime import date as dt
 from django.conf import settings
@@ -37,7 +36,7 @@ class RateService:
             'value': value
         }
 
-    def available_currencies(self) -> Iterator:
+    def available_currencies(self) -> []:
         """
         Return list of avalaible currencies
         """

@@ -15,7 +15,7 @@ Including another URLconf
 """
 import os
 
-from django.conf.urls import url, include
+from django.urls import re_path, include
 from django.contrib import admin
 from django.urls import path
 from drf_yasg import openapi
@@ -47,12 +47,12 @@ schema_view = get_schema_view(
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    url(r'^swagger(?P<format>\.json|\.yaml)$',
+    re_path(r'^swagger(?P<format>\.json|\.yaml)$',
         schema_view.without_ui(cache_timeout=0),
         name='schema-json'),
-    url(r'^swagger/$', schema_view.with_ui('swagger', cache_timeout=0),
+    re_path(r'^swagger/$', schema_view.with_ui('swagger', cache_timeout=0),
         name='schema-swagger-ui'),
-    url(r'^redoc/$', schema_view.with_ui('redoc', cache_timeout=0),
+    re_path(r'^redoc/$', schema_view.with_ui('redoc', cache_timeout=0),
         name='schema-redoc'),
     path('', include('django.contrib.auth.urls')),
     path('graphql', include(graphql_urls)),

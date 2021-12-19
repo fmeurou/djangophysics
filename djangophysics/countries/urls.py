@@ -2,7 +2,7 @@
 Country URLs
 """
 
-from django.conf.urls import url, include
+from django.urls import re_path, include
 from rest_framework import routers
 
 from .views import FlagView
@@ -17,6 +17,6 @@ router.register(r'(?P<alpha_2>\w+)/subdivisions',
 
 urlpatterns = [
 
-    url(r'^', include(router.urls)),
-    url(r'^(?P<pk>[^/.]+)/flag/$', FlagView.as_view()),
+    re_path(r'^', include(router.urls)),
+    re_path(r'^(?P<pk>[^/.]+)/flag/$', FlagView.as_view()),
 ]
