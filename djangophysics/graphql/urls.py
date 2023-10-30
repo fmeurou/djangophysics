@@ -1,7 +1,7 @@
 """
 GraphQL URL Configuration
 """
-from ariadne.contrib.django.views import GraphQLView
+from ariadne_django.views import GraphQLView
 from django.urls import path
 
 from .schema import schema

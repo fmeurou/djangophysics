@@ -18,5 +18,5 @@ router.register(r'(?P<alpha_2>\w+)/subdivisions',
 urlpatterns = [
 
     re_path(r'^', include(router.urls)),
-    re_path(r'^(?P<pk>[^/.]+)/flag/$', FlagView.as_view()),
+    re_path(r'^(?P<pk>[^/.]+)/flag/$', FlagView.as_view(), name='flag'),
 ]

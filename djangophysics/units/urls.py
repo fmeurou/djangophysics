@@ -25,7 +25,7 @@ router.register(r'(?P<system_name>\w+)/custom',
 
 urlpatterns = [
     path('convert/', ConvertView.as_view()),
-    path('<str:unit_system>/formulas/validate/', ValidateViewSet.as_view()),
-    path('<str:unit_system>/formulas/calculate/', CalculationView.as_view()),
+    path('<str:unit_system>/formulas/validate/', ValidateViewSet.as_view(), name='formula_validation'),
+    path('<str:unit_system>/formulas/calculate/', CalculationView.as_view(), name='formula_calculation'),
     re_path(r'^', include(router.urls)),
 ]

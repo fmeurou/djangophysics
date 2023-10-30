@@ -28,5 +28,5 @@ urlpatterns = [
     path('rates/', include(rate_urls)),
     path('units/', include(unit_urls)),
     path('calculations/', include(calculations_url)),
-    re_path(r'^watch/(?P<converter_id>[0-9a-f-]{36})/$', WatchView.as_view()),
+    re_path(r'^watch/(?P<converter_id>[0-9a-f-]{36})/$', WatchView.as_view(), name='watch'),
 ]

@@ -23,7 +23,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = str(uuid.uuid4())
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = [
     # Put your service URL
@@ -73,7 +73,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     'django_filters',
     'corsheaders',
-    'ariadne.contrib.django',
+    'ariadne_django',
     'djangophysics',
     'djangophysics.core',
     'djangophysics.countries',
@@ -81,7 +81,9 @@ INSTALLED_APPS = [
     'djangophysics.rates',
     'djangophysics.units',
     'djangophysics.calculations',
-    'djangophysics.graphql'
+    'djangophysics.graphql',
+    # 'geophysics_web',
+    # 'webpack_loader'
 ]
 
 MIDDLEWARE = [
@@ -334,9 +336,9 @@ SWAGGER_SETTINGS = {
 }
 
 # Adapt to your local environment or override in local.py
-ROOT_URLCONF = 'tests.urls'
-WSGI_APPLICATION = 'tests.wsgi.application'
-ASGI_APPLICATION = 'tests.asgi.application'
+ROOT_URLCONF = 'config.urls'
+WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION = 'config.asgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -375,3 +377,5 @@ PHYSICS_ADDITIONAL_DIMENSIONS = {
 PHYSICS_DOMAINS = {
     'mydomain': ['meter', ]
 }
+
+# from geophysics_web.settings import WEBPACK_LOADER

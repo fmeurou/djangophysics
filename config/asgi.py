@@ -12,7 +12,7 @@ from channels.routing import ProtocolTypeRouter
 from django.core.asgi import get_asgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings')
-from djangophysics.websockets import websocketpatterns
+from geophysics_web.websockets import websocketpatterns
 
 application = get_asgi_application()
 

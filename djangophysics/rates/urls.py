@@ -13,6 +13,6 @@ router = routers.DefaultRouter()
 router.register(r'', RateViewSet, basename='rates')
 
 urlpatterns = [
-    path('convert/', ConvertView.as_view()),
+    path('convert/', ConvertView.as_view(), name='convert'),
     re_path(r'^', include(router.urls)),
 ]
